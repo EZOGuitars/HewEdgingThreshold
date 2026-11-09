@@ -411,6 +411,7 @@ describe('EdgeTreatmentTool', () => {
   })
   it('maps actionable structured errors without exposing raw panic text', () => {
     expect(treatmentError(new Error('StaleCandidate: regenerate'))).toContain('no longer current')
+    expect(treatmentError('StlChordPrecision: detail')).toContain('STL precision')
     for (const c of [
       'UnknownObject',
       'UnknownEdge',

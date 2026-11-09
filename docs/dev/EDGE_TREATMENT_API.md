@@ -106,6 +106,8 @@ The existing `CODE: message` convention is preserved. Relevant codes include:
 - `InvalidCandidate`, `InvalidResult`, `ContainmentFailed`, `VolumeMismatch`.
 - `StaleCandidate` versus `InvalidCandidateHandle` (missing, consumed,
   replaced, foreign, or disposed token).
+- `StlChordPrecision`: the prepared roundover cannot satisfy its requested
+  chord bound in the actual millimeter-float32 STL at its current placement.
 - Tessellation errors use their existing variant codes;
   `CandidateSerialization` reports metadata encoding failure.
 
@@ -142,3 +144,31 @@ Node replay runner already passes the original JSON to Rust).
 No browser/renderer UI lifecycle is implemented here. The next step is a
 small frontend adapter around this boundary, with GPU cleanup and real
 wasm-bindgen/JavaScript exception/BigInt tests before building the wizard.
+
+## Pre-Fedora stabilization: STL precision preflight
+
+`prepare_roundover` now additionally calls
+`mesh_export::certify_roundover_stl(source, edge, candidate, radius, error)`.
+It reads the existing writer's actual serialized triangle positions, checks
+its integrity/topology gate, and certifies radial error over every transition
+triangle. It changes neither the kernel algorithm nor requested parameters.
+Failure returns `StlChordPrecision` before allocating a handle or changing the
+model/history/recording. The existing failed-prepare slot ownership rule remains.
+
+The 12-inch cube / 4-inch radius / 0.01 mm chord case is explicitly refused;
+a user-requested 0.0099 mm setting uses 57 rather than 56 chords and passes.
+The 0.250-inch / 6.35 mm radius with 0.01 mm chord still passes unchanged.
+There is no automatic refinement, clamping, or fallback.
+
+This certificate covers the candidate at its current world coordinates and the
+stored-facet export. It is not persistent analytic metadata. Native pure-kernel
+roundover still promises f64 geometry, not a format-specific guarantee. Existing
+saved faceted models and arbitrary imported meshes do not carry their original
+requested radius/chord tolerance; the generic STL exporter cannot infer it.
+Later transforms/edits require recertification if that original tolerance is
+important. Older recordings containing a newly refused placement can now reject
+at preparation rather than silently reproduce a tolerance-violating STL. No
+serialization or recording-format version was changed.
+
+See [stabilization evidence](EDGE_TREATMENT_STABILIZATION.md) for bounds,
+reproduction, regression results, and remaining limitations.

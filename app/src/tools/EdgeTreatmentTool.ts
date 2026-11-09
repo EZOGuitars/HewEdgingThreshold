@@ -49,6 +49,8 @@ export function treatmentError(error: unknown): string {
     case 'InvalidChordError':
     case 'ApproximationTooFine':
       return t`Enter a positive chord error above modeling tolerance, or increase it to use fewer segments.`
+    case 'StlChordPrecision':
+      return t`STL precision cannot preserve this chord tolerance here. Use a finer chord setting or move the model closer to the origin.`
     case 'OwnedSketchesUnsupported':
       return t`This object has an attached sketch. Edge treatment cannot safely preserve it yet.`
     case 'UnsupportedDefinitionMember':

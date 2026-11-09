@@ -1,5 +1,12 @@
 # Edge Treatment final engineering handoff
 
+> Historical baseline report for `34a889c`. The
+> [pre-Fedora stabilization report](EDGE_TREATMENT_STABILIZATION.md) supersedes
+> the STL preparation policy and verification status. Original measurements are
+> retained for reproducibility. The baseline test-typecheck PASS claim was
+> incorrect: the preserved log contains TS2783 for a duplicate measurement key;
+> stabilization removes that redundant key and reruns the check explicitly.
+
 ## Implementation status
 
 Experimental straight convex-edge chamfer and faceted circular roundover are

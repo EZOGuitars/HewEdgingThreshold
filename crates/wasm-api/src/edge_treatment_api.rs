@@ -151,6 +151,22 @@ impl Scene {
             .doc
             .prepare_edge_treatment(id, edge_id(edge), parameters.into())
             .map_err(boundary_error)?;
+        if let TreatmentParameters::Roundover {
+            radius,
+            max_chord_error,
+        } = parameters
+        {
+            mesh_export::certify_roundover_stl(
+                self.doc
+                    .object(id)
+                    .ok_or_else(|| stale("UnknownObject", "object"))?,
+                edge_id(edge),
+                &candidate.result().object,
+                radius,
+                max_chord_error,
+            )
+            .map_err(|e| ApiError::new("StlChordPrecision", &e.message()))?;
+        }
         // Geometry resolved the edge before this read. Still return a typed
         // refusal if that invariant ever changes, never unwrap a JS handle.
         let (a, b) = self
@@ -767,5 +783,73 @@ mod tests {
         let mut replay = Scene::new();
         assert_eq!(replay.replay(&json).unwrap(), s.doc.state_hash());
         assert_eq!(replay.save(), expected);
+    }
+    #[test]
+    fn stl_precision_refusal_is_atomic_and_finer_request_roundtrips_history() {
+        let mut s = Scene::new();
+        let side = 0.3048;
+        let sketch = s.begin_ground_sketch();
+        s.sketch_begin_gesture(sketch).unwrap();
+        let p = [(0.0, 0.0), (side, 0.0), (side, side), (0.0, side)];
+        for i in 0..4 {
+            s.sketch_add_segment(
+                sketch,
+                p[i].0,
+                p[i].1,
+                0.0,
+                p[(i + 1) % 4].0,
+                p[(i + 1) % 4].1,
+                0.0,
+            )
+            .unwrap();
+        }
+        s.sketch_end_gesture(sketch).unwrap();
+        let region = s.sketch_regions(sketch).unwrap()[0];
+        let object = s.extrude_region(sketch, region, side).unwrap();
+        let source = s.doc.object(object_id(object)).unwrap();
+        let edge = source
+            .edges()
+            .keys()
+            .find(|&e| {
+                let (a, b) = source.edge_endpoints(e).unwrap();
+                a.x == side && b.x == side && a.y == 0.0 && b.y == 0.0
+            })
+            .unwrap()
+            .data()
+            .as_ffi();
+        let before = s.save();
+        let depth = s.doc.undo_depth();
+        s.start_recording();
+        code(
+            s.prepare_roundover(object, edge, 0.1016, 0.00001),
+            "StlChordPrecision",
+        );
+        assert_eq!(s.save(), before);
+        assert_eq!(s.doc.undo_depth(), depth);
+        let h = s.prepare_roundover(object, edge, 0.00635, 0.00001).unwrap();
+        s.discard_edge_treatment(h).unwrap();
+        let h = s
+            .prepare_roundover(object, edge, 0.1016, 0.0000099)
+            .unwrap();
+        s.commit_edge_treatment(h).unwrap();
+        assert_eq!(s.doc.undo_depth(), depth + 1);
+        let after = s.save();
+        assert!(s.export("stl", 0).unwrap().is_some());
+        s.scene_undo().unwrap();
+        assert_eq!(s.save(), before);
+        s.scene_redo().unwrap();
+        assert_eq!(s.save(), after);
+        s.stop_recording();
+        let recorded = s.take_recording();
+        let calls: serde_json::Value = serde_json::from_str(&recorded).unwrap();
+        assert_eq!(
+            calls["calls"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|v| v["method"] == "edge_treatment")
+                .count(),
+            1
+        );
     }
 }

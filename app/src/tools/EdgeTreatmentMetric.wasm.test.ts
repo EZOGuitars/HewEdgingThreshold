@@ -199,11 +199,11 @@ function measure(bytes: Uint8Array, radius: number, rounded = true, requestedCho
     stl_manifold_outward: true,
   }
 }
-function run(mode: 'chamfer' | 'roundover', text: string, unit: 'mm' | 'dec_in') {
+function run(mode: 'chamfer' | 'roundover', text: string, unit: 'mm' | 'dec_in', chordMm = 0.01) {
   setLengthUnit(unit)
   const f = fixture()
   try {
-    f.tool.configure({ mode, distance: text, radius: text, chord: '0.01 mm' })
+    f.tool.configure({ mode, distance: text, radius: text, chord: `${chordMm} mm` })
     f.tool.generate()
     expect(f.state().phase).toBe('ready')
     const operation = f.state().info!.operation as {
@@ -213,7 +213,7 @@ function run(mode: 'chamfer' | 'roundover', text: string, unit: 'mm' | 'dec_in')
     }
     const value = mode === 'roundover' ? operation.radius! : operation.distance!
     expect(value).toBe(parseLengthToMeters(text, unit))
-    if (mode === 'roundover') expect(operation.max_chord_error).toBe(0.00001)
+    if (mode === 'roundover') expect(operation.max_chord_error).toBe(chordMm * 0.001)
     f.tool.apply()
     return { value, bytes: f.scene.export('stl', 0)! }
   } finally {
@@ -227,8 +227,11 @@ describe.skipIf(!existsSync(path))('metric dimensions across UI and actual WASM'
     it.each(pairs)(
       `${mode}: %s inches equals %s mm, measured after commit and STL import`,
       (inches, mm) => {
-        const metric = run(mode, String(mm), 'mm')
-        const imperial = run(mode, String(inches), 'dec_in')
+        // The original 4-inch / 0.01 mm case now explicitly refuses STL
+        // precision; use the tested 57-segment setting for equivalence below.
+        const chordMm = mode === 'roundover' && inches === 4 ? 0.0099 : 0.01
+        const metric = run(mode, String(mm), 'mm', chordMm)
+        const imperial = run(mode, String(inches), 'dec_in', chordMm)
         const conversionError = Math.abs(metric.value - imperial.value)
         expect(conversionError).toBeLessThanOrEqual(2e-17)
         const a = vertices(metric.bytes),
@@ -238,8 +241,8 @@ describe.skipIf(!existsSync(path))('metric dimensions across UI and actual WASM'
           ...a.flatMap((p, i) => p.map((v, axis) => Math.abs(v - b[i][axis]))),
         )
         expect(difference).toBeLessThanOrEqual(meshTolerance)
-        const measured = measure(metric.bytes, mm / 1000, mode === 'roundover')
-        measure(imperial.bytes, mm / 1000, mode === 'roundover')
+        const measured = measure(metric.bytes, mm / 1000, mode === 'roundover', chordMm * 0.001)
+        measure(imperial.bytes, mm / 1000, mode === 'roundover', chordMm * 0.001)
         // STL has no physical unit metadata. Exercise both explicitly specified
         // external-unit workflows, including an inch-coordinate STL conversion.
         const roundtrips: { meters_per_stl_unit: number; measured: ReturnType<typeof measure> }[] =
@@ -258,7 +261,12 @@ describe.skipIf(!existsSync(path))('metric dimensions across UI and actual WASM'
           const loaded: Scene = new NativeScene()
           try {
             loaded.import_stl(bytes, scale, 'explicit-unit-roundtrip')
-            const imported = measure(loaded.export('stl', 0)!, mm / 1000, mode === 'roundover')
+            const imported = measure(
+              loaded.export('stl', 0)!,
+              mm / 1000,
+              mode === 'roundover',
+              chordMm * 0.001,
+            )
             expect(imported.stl_dimensional_error_mm).toBeLessThanOrEqual(meshTolerance * 1000)
             roundtrips.push({ meters_per_stl_unit: scale, measured: imported })
           } finally {
@@ -279,6 +287,24 @@ describe.skipIf(!existsSync(path))('metric dimensions across UI and actual WASM'
         )
       },
     )
+  it('refuses the original 4-inch STL exceedance without modifying the source', () => {
+    setLengthUnit('mm')
+    const f = fixture()
+    try {
+      const before = f.scene.save(),
+        depth = f.scene.undo_depth()
+      f.tool.configure({ mode: 'roundover', radius: '101.6 mm', chord: '0.01 mm' })
+      f.tool.generate()
+      expect(f.state().phase).toBe('error')
+      expect(f.state().error).toContain('STL precision')
+      f.tool.apply()
+      expect(f.scene.save()).toEqual(before)
+      expect(f.scene.undo_depth()).toBe(depth)
+    } finally {
+      f.tool.cancel()
+      f.scene.free()
+    }
+  })
   it.each([0.1, 0.25, 0.5, 1.25, 2.54, 6.35, 12.7])(
     'decimal %s mm: display and 100 unit cycles retain the actual dimension',
     (mm) => {
@@ -361,7 +387,7 @@ describe.skipIf(!existsSync(path))('metric dimensions across UI and actual WASM'
         f.tool.apply()
         const measured = measure(f.scene.export('stl', 0)!, 0.05, true, mm * 0.001)
         process.stdout.write(
-          'METRIC_CHORD,' + JSON.stringify({ requested_chord_mm: mm, ...measured }) + '\n',
+          'METRIC_CHORD,' + JSON.stringify({ ...measured }) + '\n',
         )
       } finally {
         f.tool.cancel()

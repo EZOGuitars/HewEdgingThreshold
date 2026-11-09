@@ -80,6 +80,9 @@
 //! does — a live export must see what a live save sees (docs/agents/HEW_API.md:
 //! "the same command produces the same file headless or live").
 
+mod roundover_precision;
+pub use roundover_precision::certify_roundover_stl;
+
 use kernel::{Document, FaceId, MaterialId, MaterialPalette, Object, Point3, Rgba8};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Cursor;

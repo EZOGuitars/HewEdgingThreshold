@@ -7846,6 +7846,10 @@ msgstr "STL model"
 msgid "STL model (.stl)"
 msgstr "STL model (.stl)"
 
+#: src/tools/EdgeTreatmentTool.ts
+msgid "STL precision cannot preserve this chord tolerance here. Use a finer chord setting or move the model closer to the origin."
+msgstr "STL precision cannot preserve this chord tolerance here. Use a finer chord setting or move the model closer to the origin."
+
 #. Example tag path shown as placeholder text
 #. Example tag path shown as placeholder text
 #: src/panels/ObjectInfoPanel.tsx
