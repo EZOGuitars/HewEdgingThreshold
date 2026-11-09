@@ -24,6 +24,7 @@ pub mod attr;
 pub mod axes;
 pub mod camera;
 pub mod document;
+pub mod edge_treatment;
 pub mod error;
 pub mod geo;
 pub mod guide;

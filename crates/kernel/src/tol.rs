@@ -27,6 +27,14 @@ pub const NORMALIZE_MIN_LENGTH: f64 = 1e-12;
 /// same direction (dimensionless).
 pub const NORMAL_DIRECTION: f64 = 1e-9;
 
+/// Relative error allowed in an edge treatment's analytic removed volume.
+pub const EDGE_TREATMENT_VOLUME_REL: f64 = 1e-7;
+
+/// Floating-point cancellation budget for subtracting two solid volumes.
+/// Multiplies machine epsilon and the source volume; a cut below this
+/// budget is refused rather than accepted without a meaningful volume check.
+pub const EDGE_TREATMENT_VOLUME_ULPS: f64 = 128.0;
+
 /// Maximum ratio of an offset miter join's vertex displacement to the
 /// offset distance (dimensionless) — the classic 2D stroke miter limit,
 /// applied by `offset::offset_loop`.
