@@ -272,12 +272,15 @@ export class EdgeTreatmentTool implements Tool {
       )
         throw new Error('InvalidCandidateHandle: mismatched preview')
       const mesh = this.scene.edge_treatment_mesh(handle)
+      const resources: (THREE.BufferGeometry | THREE.Material)[] = []
+      let attached = false
       try {
         const positions = mesh.positions(),
           normals = mesh.normals(),
           indices = mesh.indices(),
           edgePositions = mesh.edge_positions()
         const geometry = new THREE.BufferGeometry()
+        resources.push(geometry)
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
         geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3))
         geometry.setIndex(new THREE.BufferAttribute(indices, 1))
@@ -289,22 +292,29 @@ export class EdgeTreatmentTool implements Tool {
           depthTest: false,
           side: THREE.DoubleSide,
         })
+        resources.push(material)
         const candidate = new THREE.Mesh(geometry, material)
         candidate.renderOrder = 997
-        clearPreview(this.meshGroup)
-        this.meshGroup.add(candidate)
-        const edges = new THREE.BufferGeometry().setAttribute(
-          'position',
-          new THREE.BufferAttribute(edgePositions, 3),
-        )
-        const wire = new THREE.LineSegments(
-          edges,
-          new THREE.LineBasicMaterial({ color: 0x00e5ff, depthTest: false }),
-        )
+        const edges = new THREE.BufferGeometry()
+        resources.push(edges)
+        edges.setAttribute('position', new THREE.BufferAttribute(edgePositions, 3))
+        const wireMaterial = new THREE.LineBasicMaterial({ color: 0x00e5ff, depthTest: false })
+        resources.push(wireMaterial)
+        const wire = new THREE.LineSegments(edges, wireMaterial)
         wire.renderOrder = 998
-        this.meshGroup.add(wire)
+        // Publish only after every buffer/material is ready. Until then,
+        // the local list owns even allocations not yet attached to a Mesh.
+        this.meshGroup.add(candidate, wire)
+        attached = true
       } finally {
-        mesh.free()
+        try {
+          if (!attached) {
+            this.meshGroup.clear()
+            for (const resource of resources) resource.dispose()
+          }
+        } finally {
+          mesh.free()
+        }
       }
       this.state.info = info
       this.state.phase = 'ready'
@@ -328,17 +338,38 @@ export class EdgeTreatmentTool implements Tool {
     const handle = this.handle,
       object = this.state.target.object
     this.handle = null // Matching attempts consume the native candidate, even on failure.
+    let change: DocChangeJs
     try {
-      const change = this.scene.commit_edge_treatment(handle)
-      this.reset() // Invalidate topology selections BEFORE document refresh.
-      try {
-        this.committed(object, change)
-      } finally {
-        change.free()
-      }
+      change = this.scene.commit_edge_treatment(handle)
     } catch (error) {
       this.reset()
       this.fail(error)
+      return
+    }
+    // Native geometry/history/recording have committed. A later cleanup or
+    // renderer exception must not be presented as a refused model operation.
+    this.state.target = null
+    this.state.info = null
+    this.state.acknowledged = false
+    let refreshFailed = false
+    try {
+      try {
+        this.reset()
+      } catch {
+        refreshFailed = true
+      }
+      try {
+        this.committed(object, change)
+      } catch {
+        refreshFailed = true
+      }
+    } finally {
+      change.free()
+    }
+    if (refreshFailed) {
+      this.state.phase = 'error'
+      this.state.error = t`The treatment was applied, but the view could not be refreshed. Use Undo or reopen the document before continuing.`
+      this.emit()
     }
   }
   private fail(error: unknown): void {

@@ -230,6 +230,103 @@ describe('EdgeTreatmentTool', () => {
     expect(f.scene.discard_edge_treatment).toHaveBeenCalledWith(1)
     f.tool.cancel()
   })
+  it('disposes an allocation when preview setup throws before attachment', () => {
+    const f = fixture()
+    f.tool.onPointerDown(snap, ray)
+    const dispose = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose')
+    const setup = vi
+      .spyOn(THREE.BufferGeometry.prototype, 'setAttribute')
+      .mockImplementationOnce(() => {
+        throw new Error('preview buffer setup')
+      })
+    try {
+      f.tool.generate()
+      expect(f.state().phase).toBe('error')
+      expect(f.scene.commit_edge_treatment).not.toHaveBeenCalled()
+      expect(f.meshes[0].free).toHaveBeenCalledOnce()
+      expect(f.scene.discard_edge_treatment).toHaveBeenCalledOnce()
+      expect(dispose).toHaveBeenCalledOnce()
+    } finally {
+      f.tool.cancel()
+      setup.mockRestore()
+      dispose.mockRestore()
+    }
+  })
+
+  it('disposes both allocations if edge setup fails after the surface is assembled', () => {
+    const f = fixture()
+    f.tool.onPointerDown(snap, ray)
+    const dispose = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose')
+    const original = THREE.BufferGeometry.prototype.setAttribute
+    let attributes = 0
+    const setup = vi
+      .spyOn(THREE.BufferGeometry.prototype, 'setAttribute')
+      .mockImplementation(function (this: THREE.BufferGeometry, name, attribute) {
+        if (++attributes === 3) throw new Error('edge buffer setup')
+        return original.call(this, name, attribute)
+      })
+    try {
+      f.tool.generate()
+      expect(f.state().phase).toBe('error')
+      expect(f.meshes[0].free).toHaveBeenCalledOnce()
+      expect(f.scene.discard_edge_treatment).toHaveBeenCalledOnce()
+      expect(dispose).toHaveBeenCalledTimes(2)
+    } finally {
+      f.tool.cancel()
+      setup.mockRestore()
+      dispose.mockRestore()
+    }
+  })
+
+  it('reports a committed treatment accurately when document refresh throws', () => {
+    const f = fixture()
+    f.tool.onPointerDown(snap, ray)
+    f.tool.generate()
+    const change = { free: vi.fn() }
+    f.scene.commit_edge_treatment.mockReturnValue(change)
+    f.commit.mockImplementation(() => {
+      throw new Error('renderer refresh')
+    })
+    try {
+      f.tool.apply()
+      expect(f.scene.commit_edge_treatment).toHaveBeenCalledOnce()
+      expect(change.free).toHaveBeenCalledOnce()
+      expect(f.state().target).toBeNull()
+      expect(f.state().phase).toBe('error')
+      expect(f.state().error).toContain('was applied')
+      f.tool.apply()
+      expect(f.scene.commit_edge_treatment).toHaveBeenCalledOnce()
+    } finally {
+      f.tool.cancel()
+    }
+  })
+
+  it('always frees the commit result and notifies the host if preview cleanup throws', () => {
+    const f = fixture()
+    f.tool.onPointerDown(snap, ray)
+    f.tool.generate()
+    const candidate = f.group.children[0].children[0].children[0] as THREE.Mesh
+    let thrown = false
+    candidate.geometry.addEventListener('dispose', () => {
+      if (!thrown) {
+        thrown = true
+        throw new Error('dispose listener')
+      }
+    })
+    const change = { free: vi.fn() }
+    f.scene.commit_edge_treatment.mockReturnValue(change)
+    try {
+      f.tool.apply()
+      expect(f.scene.commit_edge_treatment).toHaveBeenCalledOnce()
+      expect(f.commit).toHaveBeenCalledOnce()
+      expect(change.free).toHaveBeenCalledOnce()
+      expect(f.state().target).toBeNull()
+      expect(f.state().error).toContain('was applied')
+    } finally {
+      f.tool.cancel()
+    }
+  })
+
   it('consumes stale failures without document refresh', () => {
     const f = fixture()
     f.tool.onPointerDown(snap, ray)

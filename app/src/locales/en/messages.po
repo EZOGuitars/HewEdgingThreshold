@@ -8572,6 +8572,10 @@ msgstr "The thickness must be more than zero."
 msgid "The treatment could not be validated. Reduce its dimensions or select another supported straight convex edge."
 msgstr "The treatment could not be validated. Reduce its dimensions or select another supported straight convex edge."
 
+#: src/tools/EdgeTreatmentTool.ts
+msgid "The treatment was applied, but the view could not be refreshed. Use Undo or reopen the document before continuing."
+msgstr "The treatment was applied, but the view could not be refreshed. Use Undo or reopen the document before continuing."
+
 #: src/i18n/nativeMenu.ts
 msgid "The update could not be installed.\n"
 "\n"

@@ -4680,6 +4680,9 @@ export default function Viewport({
      * full rebuild runs as before.
      */
     function handleSceneRefresh(touched?: RefreshTouched): void {
+      // The model has already changed. Keep the dirty/save state truthful
+      // even if rebuilding a GPU buffer or refreshing annotations throws.
+      onDocumentChangedRef.current?.()
       // The document changed (a commit, undo/redo, a session opened or
       // closed): a mirrored gesture still in flight re-reads its sibling
       // frames on the next sync rather than drawing at stale poses.
@@ -4689,7 +4692,6 @@ export default function Viewport({
         ? sceneRenderer.refreshTouched(touched)
         : sceneRenderer.refresh()
       onSceneChangeRef.current?.(wtMap)
-      onDocumentChangedRef.current?.()
       // Every kernel-mutating path funnels through here (tool commits,
       // boolean/group/delete, undo, redo, harness ops) — a transform/
       // boolean/delete on a node can geometrically re-anchor or DETACH a
