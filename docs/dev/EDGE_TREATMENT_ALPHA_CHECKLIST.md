@@ -53,6 +53,31 @@ For every row, record **Pass / Fail / Not tested** and brief actual results.
 | 30 | Make a recording containing Apply, Undo, and Redo; replay where supported. | One modeling command per successful Apply; previews/candidates are not modeling commands. Record any explicit replay refusal. | |
 | 31 | Restart after the previous actions. | Separate alpha recovery/preferences work; normal installation's state remains untouched. | |
 
+## First-session dimensional acceptance
+
+Before the longer stress/context checks, prioritize launch, tool visibility,
+straight-edge selection, chamfer preview, roundover preview, measured dimensions,
+unit switching, invalid inputs, single Apply, Cancel, Undo/Redo, save/reopen,
+STL dimensions, repeated preview cleanup, and safe unsupported-geometry refusal.
+
+Use **two fresh 12 × 12 × 12 inch cubes** (304.8 mm per side), not sequential
+cuts on one source. On the first, request a **0.250-inch roundover** and
+**0.01 mm maximum chord error**. On the second, request the equivalent
+**6.35 mm roundover** with the same chord tolerance. Pick corresponding supported
+edges. Check `6.35 mm` → `0.25"` → `6.35 mm`, repeat switching, and confirm no
+changed model until Apply. Each Apply adds exactly one treatment; Cancel adds
+none. Undo/Redo and save/reopen must preserve the intended result.
+
+Independently inspect both exports as **millimeter-coordinate STL**. Confirm
+304.8 mm outer dimensions, 6.35 mm tangent setbacks (within the documented
+float32 precision budget), equal physical geometry, outward watertight facets,
+and no 25.4× scaling. Expect a 14-chord quarter-circle at the chosen tolerance;
+maximum chord deviation is about 0.0099898 mm, rather than a perfectly analytic
+circle. Use the [measurement report](EDGE_TREATMENT_DIMENSIONAL_ACCURACY.md)
+for numerical references and keep display rounding separate from measurement.
+Record actual measurements and external viewer/slicer units; a visually rounded
+corner alone does not pass dimensional acceptance.
+
 ## Report a failure
 
 Write down the row number, exact steps, dimensions/units, selected edge, actual

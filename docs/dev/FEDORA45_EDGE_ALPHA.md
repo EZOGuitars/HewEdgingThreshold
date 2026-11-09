@@ -194,3 +194,67 @@ open and overwrite. Help → Report Bug can prepare a local diagnostic bundle;
 review it before sending, and do not automatically upload private models/logs.
 
 Proceed through [the manual checklist](EDGE_TREATMENT_ALPHA_CHECKLIST.md).
+
+## 7. Short first-build sequence (Fedora 45 KDE)
+
+Target: ThinkPad P14s Gen 7 AMD / Ryzen AI 7 PRO 450 / 32 GB RAM. No commands
+are executed on the laptop remotely. Install the Fedora packages above first;
+this sequence assumes `gh`, rustup, and fnm are installed and authenticated.
+It uses a new directory, not an existing Hew installation or checkout.
+
+```bash
+mkdir -p "$HOME/src"
+gh repo clone EZOGuitars/Hew3dEdging "$HOME/src/hew-edge-treatment-alpha" \
+  -- --branch feature/edge-treatment
+cd "$HOME/src/hew-edge-treatment-alpha"
+git checkout feature/edge-treatment
+git remote add upstream https://github.com/hew3d/hew.git
+git rev-parse HEAD   # compare with the engineering delivery receipt
+rustup toolchain install 1.97.1 --component clippy --component rustfmt \
+  --target wasm32-unknown-unknown
+eval "$(fnm env --shell bash)"
+fnm install 26.7.0
+fnm use 26.7.0
+npm install --global pnpm@11.20.0
+scripts/install-wasm-pack.sh
+pnpm install --frozen-lockfile
+wasm-pack build crates/wasm-api --target nodejs \
+  --out-dir ../../tools/replay-runner/pkg-node
+node --test tools/replay-runner/edge-treatment-smoke.mjs
+cargo test -p mesh-export --locked --test metric_accuracy
+pnpm --dir app test src/tools/EdgeTreatmentMetric.wasm.test.ts --maxWorkers=2
+unset CARGO_TARGET_DIR
+pnpm --dir shells/tauri exec node scripts/stage-cli-sidecar.mjs
+export HEW_BETA_SHA="$(git rev-parse --short=12 HEAD)"
+pnpm --dir shells/tauri exec tauri build \
+  --config src-tauri/tauri.edge-alpha.conf.json --no-bundle
+ALPHA_ROOT="$PWD"
+ALPHA_STATE="$HOME/.local/state/hew-edge-treatment-alpha"
+mkdir -p "$ALPHA_STATE"/{config,data,cache,state,logs,models}
+set -o pipefail
+env XDG_CONFIG_HOME="$ALPHA_STATE/config" \
+    XDG_DATA_HOME="$ALPHA_STATE/data" \
+    XDG_CACHE_HOME="$ALPHA_STATE/cache" \
+    XDG_STATE_HOME="$ALPHA_STATE/state" RUST_LOG=info \
+    "$ALPHA_ROOT/shells/tauri/src-tauri/target/release/hew" \
+    2>&1 | tee "$ALPHA_STATE/logs/console.log"
+```
+
+The Tauri `beforeBuildCommand` builds the web WASM/frontend, so the short
+sequence does not need a redundant explicit web build. Run the fuller checks
+in §4 when diagnosing a failure. Do not continue past a failed build or smoke.
+The alpha's build products stay inside this clone, with the sidecar staging
+caveat described in §5. Keep CPU-heavy builds separate from broad UI tests.
+
+## 8. Cleanup without touching installed Hew
+
+Close the alpha first. Preserve model copies, logs, reproducer bundles, and the
+exact tested SHA before discarding anything. From the alpha clone, the standard
+`cargo clean` and `cargo clean --manifest-path shells/tauri/src-tauri/Cargo.toml`
+remove only their respective generated Rust build products. `git clean -ndX`
+previews ignored files; inspect that list before deleting generated JS/WASM
+outputs, since ignored files can include local data. Deleting this isolated
+clone and the explicitly chosen alpha XDG directory is optional after backing
+up test results. Do not delete or change the normal Hew application, its state
+directories, desktop entries, or associations. There is no alpha installer to
+uninstall.
