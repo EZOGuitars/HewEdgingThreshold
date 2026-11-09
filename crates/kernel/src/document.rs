@@ -34,9 +34,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::num::NonZeroU32;
 
 mod draft;
+mod edge_treatment;
 pub use draft::{
     DraftCurveRun, DraftEdge, DraftRegion, DraftRegionWhy, DraftReport, DraftStore, DraftUnit,
     PlaneListing, PlaneUnits,
+};
+pub use edge_treatment::{
+    DocumentEdgeTreatmentError, EdgeTreatmentCandidate, EdgeTreatmentOperation,
 };
 
 use slotmap::SlotMap;
@@ -811,6 +815,8 @@ pub fn render_history_label(kind: &HistoryKind) -> String {
         "set-attribute" => format!("Set attribute {}.{}", text("namespace"), text("key")),
         "delete-attribute" => format!("Delete attribute {}", text("namespace")),
         "follow-me" => "Follow Me".to_string(),
+        "chamfer-edge" => "Chamfer edge".to_string(),
+        "roundover-edge" => "Round over edge".to_string(),
         "push-pull" => "Push/Pull".to_string(),
         "draw-on-face" => "Draw on face".to_string(),
         "delete-imprint" => "Delete imprint".to_string(),
@@ -1035,6 +1041,16 @@ enum DocAction {
     /// A per-Object op (push/pull, split, merge) ran; undo/redo delegate to that
     /// Object's [`History`].
     ObjectOp { object: ObjectId },
+    /// Geometry-only edit with stable document identity. Exact snapshots
+    /// preserve the per-object history's topology on either side of this
+    /// action, following Repaired's snapshot replay convention.
+    EdgeTreated {
+        object: ObjectId,
+        operation: EdgeTreatmentOperation,
+        before: Object,
+        after: Object,
+        reanchored: Vec<AnnotationReanchor>,
+    },
     /// A boolean combined two objects into one. Undo hides `result` and unhides
     /// the operands; redo reverses. Like `CreatedObject`, all three handles stay
     /// stable (hide-not-delete), so later ops keep referring to live handles.
@@ -2242,7 +2258,7 @@ impl DocAction {
                 v.extend(*merged_base);
                 v
             }
-            DocAction::ObjectOp { object } => vec![*object],
+            DocAction::ObjectOp { object } | DocAction::EdgeTreated { object, .. } => vec![*object],
             DocAction::Boolean { result, a, b, .. } => vec![*result, *a, *b],
             DocAction::BooleanNodes {
                 result_objects,
@@ -2403,7 +2419,7 @@ impl DocAction {
                 .flat_map(DocAction::touched_sketches)
                 .collect(),
             DocAction::CreatedObject { sketch, .. } => vec![*sketch],
-            DocAction::ObjectOp { .. } => Vec::new(),
+            DocAction::ObjectOp { .. } | DocAction::EdgeTreated { .. } => Vec::new(),
             DocAction::Boolean { .. }
             | DocAction::BooleanNodes { .. }
             | DocAction::Sliced { .. }
@@ -3516,6 +3532,10 @@ pub struct InsertReport {
 /// document-level undo/redo log. UI-free and I/O-free (DEVELOPMENT.md rule 1).
 #[derive(Debug, Clone, Default)]
 pub struct Document {
+    /// Session-only logical-document identity for detached edge candidates.
+    /// Clones/checkpoints share it; new/load create a new identity. It is
+    /// neither serialized nor included in deterministic state hashes.
+    edge_candidate_identity: std::sync::Arc<()>,
     sketches: SlotMap<SketchId, Sketch>,
     objects: SlotMap<ObjectId, ObjectRecord>,
     groups: SlotMap<GroupId, GroupRecord>,
@@ -19505,6 +19525,10 @@ impl Document {
             },
             DocAction::Sliced { .. } => k("slice"),
             DocAction::PushThrough { .. } => k("push-through"),
+            DocAction::EdgeTreated { operation, .. } => match operation {
+                EdgeTreatmentOperation::Chamfer { .. } => k("chamfer-edge"),
+                EdgeTreatmentOperation::Roundover { .. } => k("roundover-edge"),
+            },
             DocAction::Repaired { kind, .. } => match *kind {
                 RepairKind::Cap { rims } => k("close-openings").count("count", rims),
                 RepairKind::DeleteFaces { faces } => k("delete-faces").count("count", faces),
@@ -20947,6 +20971,22 @@ impl Document {
                         .retain(|n| !matches!(n, NodeId::Object(o) if split_off.contains(o)));
                 }
                 self.repair_change(*object, split_off, *parent)
+            }
+            DocAction::EdgeTreated {
+                object,
+                before,
+                reanchored,
+                ..
+            } => {
+                self.objects[*object].object = before.clone();
+                for r in reanchored {
+                    self.annotations[r.annotation].annotation = r.before.clone();
+                    self.annotations[r.annotation].detached = r.before_detached;
+                }
+                DocChange {
+                    objects_touched: vec![*object],
+                    ..DocChange::default()
+                }
             }
             DocAction::Transform {
                 objects,
@@ -22585,6 +22625,22 @@ impl Document {
                         .extend(split_off.iter().map(|&o| NodeId::Object(o)));
                 }
                 self.repair_change(*object, split_off, *parent)
+            }
+            DocAction::EdgeTreated {
+                object,
+                after,
+                reanchored,
+                ..
+            } => {
+                self.objects[*object].object = after.clone();
+                for r in reanchored {
+                    self.annotations[r.annotation].annotation = r.after.clone();
+                    self.annotations[r.annotation].detached = r.after_detached;
+                }
+                DocChange {
+                    objects_touched: vec![*object],
+                    ..DocChange::default()
+                }
             }
             DocAction::Transform {
                 objects,
