@@ -43,6 +43,10 @@ pub const RECORDING_FORMAT_VERSION: u32 = 2;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "method", rename_all = "snake_case")]
 pub enum RecordedCall {
+    /// Committed edge treatment; preview handles never enter recordings.
+    EdgeTreatment {
+        command: crate::edge_treatment_api::TreatmentCommand,
+    },
     /// `begin_ground_sketch()`.
     BeginGroundSketch,
     /// `begin_sketch_on_plane(px, py, pz, nx, ny, nz)` — mints a sketch on an

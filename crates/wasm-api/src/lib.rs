@@ -22,6 +22,7 @@
 //! the demo path.
 
 mod draft_api;
+mod edge_treatment_api;
 mod geo_api;
 mod health;
 mod live;
@@ -2301,6 +2302,8 @@ impl SnapJs {
 /// `reconcile`s those derived caches from the returned [`DocChange`].
 #[wasm_bindgen]
 pub struct Scene {
+    /// At most one detached edge preview; dropped with Scene or on load.
+    edge_candidate: Option<edge_treatment_api::PreparedTreatment>,
     doc: Document,
     inference: InferenceScene,
     /// Where each face's triangles sit in an Object's render buffers
@@ -2836,6 +2839,7 @@ impl Scene {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Scene {
         Scene {
+            edge_candidate: None,
             doc: Document::new(),
             inference: InferenceScene::new(),
             face_range_cache: SecondaryMap::new(),
@@ -10479,6 +10483,7 @@ impl Scene {
         recording::without_capture(|| {
             for call in rec.calls {
                 match call {
+                    EdgeTreatment { command } => self.replay_treatment(command)?,
                     BeginGroundSketch => {
                         self.begin_ground_sketch();
                     }
@@ -11626,6 +11631,7 @@ impl Scene {
         let new_doc = Document::load(bytes).map_err(|e: LoadError| api_err(&e, &e))?;
 
         // Swap is committed only after successful parse.
+        self.edge_candidate = None;
         self.doc = new_doc;
         self.doc_epoch += 1;
         self.skp_source = None;
