@@ -44,7 +44,7 @@ credentials need to be copied to Fedora:
 gh auth login --hostname github.com --git-protocol https
 gh auth setup-git
 mkdir -p "$HOME/src"
-gh repo clone EZOGuitars/hew-edge-treatment "$HOME/src/hew-edge-treatment-alpha" \
+gh repo clone EZOGuitars/Hew3dEdging "$HOME/src/hew-edge-treatment-alpha" \
   -- --branch feature/edge-treatment
 cd "$HOME/src/hew-edge-treatment-alpha"
 git checkout feature/edge-treatment
