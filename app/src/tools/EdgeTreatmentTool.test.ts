@@ -395,7 +395,18 @@ describe('EdgeTreatmentTool', () => {
     f.tool.configure({ distance: '0.123456789123456 mm' })
     setLengthUnit('cm')
     expect(f.state().unit).toBe('cm')
-    expect(f.state().distance).toBe(`${0.123456789123456 * 0.001} m`)
+    expect(f.state().distance.endsWith(' cm')).toBe(true)
+    f.tool.onPointerDown(snap, ray)
+    for (let i = 0; i < 100; i++) {
+      setLengthUnit('dec_in')
+      setLengthUnit('mm')
+    }
+    f.tool.generate()
+    expect(f.scene.prepare_chamfer).toHaveBeenLastCalledWith(1n, 2n, 0.123456789123456 * 0.001)
+    // A real edit replaces canonical meters, even if it reuses displayed text.
+    f.tool.configure({ distance: '2.54' })
+    f.tool.generate()
+    expect(f.scene.prepare_chamfer).toHaveBeenLastCalledWith(1n, 2n, 0.00254)
     f.tool.cancel()
   })
   it('maps actionable structured errors without exposing raw panic text', () => {

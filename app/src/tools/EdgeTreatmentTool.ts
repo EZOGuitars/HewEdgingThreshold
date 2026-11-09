@@ -82,6 +82,9 @@ export class EdgeTreatmentTool implements Tool {
   private edgeGroup = new THREE.Group()
   private handle: number | null = null
   private timer: ReturnType<typeof setTimeout> | null = null
+  // Display formatting has a finite precision ceiling. Never reparse its
+  // rounded text after a unit switch; only an actual field edit replaces this.
+  private canonical: Partial<Record<'distance' | 'radius' | 'chord', number>> = {}
   private active = false
   private unsubscribe: (() => void) | null = null
   private context: EditContext = { kind: 'top' }
@@ -112,12 +115,14 @@ export class EdgeTreatmentTool implements Tool {
     this.active = true
     this.preview.add(this.root)
     this.unsubscribe = subscribe((unit) => {
-      // Preserve values exactly when display units change, including values
-      // beyond display precision. Explicit meters round-trip the same f64.
+      // Keep canonical meters while formatting the selected display unit.
       const old = this.state.unit
       for (const field of ['distance', 'radius', 'chord'] as const) {
-        const value = parseLengthToMeters(this.state[field], old)
-        if (value !== null) this.state[field] = `${value} m`
+        const value = this.canonical[field] ?? parseLengthToMeters(this.state[field], old)
+        if (value !== null) {
+          this.canonical[field] = value
+          this.state[field] = formatLengthIn(value, unit, 'exact')
+        }
       }
       this.state.unit = unit
       this.requestPreview()
@@ -179,6 +184,9 @@ export class EdgeTreatmentTool implements Tool {
     this.requestPreview()
   }
   configure(values: Partial<Pick<TreatmentState, 'mode' | 'distance' | 'radius' | 'chord'>>): void {
+    for (const field of ['distance', 'radius', 'chord'] as const) {
+      if (values[field] !== undefined) delete this.canonical[field]
+    }
     Object.assign(this.state, values)
     this.requestPreview()
   }
@@ -205,10 +213,11 @@ export class EdgeTreatmentTool implements Tool {
     clearPreview(this.meshGroup)
   }
   private input(): { distance: number; radius: number; chord: number } | null {
-    const parse = (value: string) => parseLengthToMeters(value, this.state.unit)
-    const distance = parse(this.state.distance),
-      radius = parse(this.state.radius),
-      chord = parse(this.state.chord)
+    const parse = (field: 'distance' | 'radius' | 'chord') =>
+      this.canonical[field] ?? parseLengthToMeters(this.state[field], this.state.unit)
+    const distance = parse('distance'),
+      radius = parse('radius'),
+      chord = parse('chord')
     const valid = (n: number | null): n is number => n !== null && Number.isFinite(n) && n > 0
     if (this.state.mode === 'chamfer' ? !valid(distance) : !valid(radius) || !valid(chord))
       return null
