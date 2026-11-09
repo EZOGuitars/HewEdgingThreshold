@@ -1,0 +1,13 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Hew Edge Treatment Alpha",
+  "identifier": "com.hew3d.Hew.EdgeTreatmentAlpha",
+  "plugins": {
+    "updater": {
+      "endpoints": []
+    }
+  },
+  "bundle": {
+    "active": false
+  }
+}
