@@ -50,6 +50,9 @@ import { expandByVisibleObject } from './visibleBounds'
 import { SectionManager, rescaleSectionPlane } from './sectionManager'
 import { isVisiblePartSnap, isClearFaceSnap, classifyTapeHold } from './tapePartsGate'
 import * as inputRecorder from '../recording/inputRecorder'
+import { EdgeTreatmentTool, type TreatmentState } from '../tools/EdgeTreatmentTool'
+import { EdgeTreatmentPanel } from '../panels/EdgeTreatmentPanel'
+import { useState } from 'react'
 import { ToolController } from '../tools/ToolController'
 import { draftEdgesToErase } from '../tools/transformSelection'
 import { RectangleTool } from '../tools/RectangleTool'
@@ -2509,6 +2512,8 @@ export default function Viewport({
   // forced reapply (the seq bumped) apart from an echoed prop update that
   // merely re-reports a transition the tool controller already made.
   const lastAppliedToolSeqRef = useRef<number | undefined>(undefined)
+  const edgeTreatmentRef = useRef<EdgeTreatmentTool | null>(null)
+  const [edgeTreatmentState, setEdgeTreatmentState] = useState<TreatmentState | null>(null)
   // The `toolName` argument `switchToolRef` was last invoked with — set on
   // EVERY invocation (prop-driven switch, internal handoff, Escape revert,
   // one-shot), inside `switchToolRef.current` itself below. This, NOT
@@ -4678,6 +4683,7 @@ export default function Viewport({
       // The document changed (a commit, undo/redo, a session opened or
       // closed): a mirrored gesture still in flight re-reads its sibling
       // frames on the next sync rather than drawing at stale poses.
+      if (toolController.activeTool instanceof EdgeTreatmentTool) toolController.activeTool.documentChanged()
       siblingPreview.invalidate()
       const wtMap = touched !== undefined
         ? sceneRenderer.refreshTouched(touched)
@@ -7065,6 +7071,22 @@ export default function Viewport({
       return tool
     }
 
+    function makeEdgeTreatmentTool(): EdgeTreatmentTool {
+      const tool = new EdgeTreatmentTool(wasmScene, previewGroup,
+        (objectId) => {
+          handleSceneRefresh({ objectIds: [objectId] })
+          onSelectRef.current?.({ kind: 'object', id: objectId }, 'replace')
+        },
+        state => { setEdgeTreatmentState(state); scheduleRender() },
+        // oxlint-disable-next-line lingui/no-unlocalized-strings -- ToolName identifier
+        () => switchToolRef.current?.('Select'),
+      )
+      edgeTreatmentRef.current = tool
+      applyEditContext(tool, computeEditContext(wasmScene, activeContextRef.current))
+      tool.setFaceEligibility(faceDrawEligible)
+      return tool
+    }
+
     function makeFollowMeTool(): FollowMeTool {
       const tool = new FollowMeTool(
         wasmScene,
@@ -7796,6 +7818,11 @@ export default function Viewport({
           cameraModeRef.current = false
           controls.mouseButtons.LEFT = null
           toolController.setTool(makePushPullTool())
+          break
+        case 'Edge Treatment':
+          cameraModeRef.current = false
+          controls.mouseButtons.LEFT = null
+          toolController.setTool(makeEdgeTreatmentTool())
           break
         case 'Follow Me':
           cameraModeRef.current = false
@@ -11252,6 +11279,7 @@ export default function Viewport({
 
     // ------------------------------------------------------------------ cleanup
     return () => {
+      if (toolController.activeTool instanceof EdgeTreatmentTool) toolController.activeTool.cancel()
       renderScheduler.cancel()
       document.removeEventListener('visibilitychange', onVisibilityChange)
       // A Scene camera tween and its settle timer outlive nothing: cancel
@@ -11568,9 +11596,9 @@ export default function Viewport({
   }, [selectedAnnotation])
 
   return (
-    <div
-      ref={containerRef}
-      style={{ width: '100%', height: '100%' }}
-    />
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+      {edgeTreatmentState && edgeTreatmentRef.current && <EdgeTreatmentPanel tool={edgeTreatmentRef.current} state={edgeTreatmentState} />}
+    </div>
   )
 }

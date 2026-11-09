@@ -317,6 +317,7 @@ const T = {
   Dimension: 'Dimension' as ToolName,
   DrawingAxes: 'Drawing Axes' as ToolName,
   EditVertex: 'Edit Vertex' as ToolName,
+  EdgeTreatment: 'Edge Treatment' as ToolName,
   FollowMe: 'Follow Me' as ToolName,
   Line: 'Line' as ToolName,
   LookAround: 'Look Around' as ToolName,
@@ -1448,6 +1449,7 @@ export function MenuBar({
               checked={activeTool === T.PushPull}
               onClick={withClose(() => onSelectTool?.(T.PushPull))}
             />
+            <CheckMenuItem label={toolLabel(T.EdgeTreatment)} checked={activeTool === T.EdgeTreatment} onClick={withClose(() => onSelectTool?.(T.EdgeTreatment))} />
             <CheckMenuItem
               label={toolLabel(T.FollowMe)}
               checked={activeTool === T.FollowMe}

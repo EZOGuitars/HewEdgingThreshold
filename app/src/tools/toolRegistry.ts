@@ -67,6 +67,7 @@ export const TOOL_REGISTRY: readonly ToolSpec[] = [
   // ---- Modify ----
   { name: 'Push/Pull', label: msg`Push/Pull`, group: 'Modify', macKey: 'P', winKey: 'P' },
   // Follow Me: SketchUp defines no default key for it either.
+  { name: 'Edge Treatment', label: msg`Edge Treatment`, group: 'Modify', macKey: '', winKey: '' },
   { name: 'Follow Me', label: msg`Follow Me`, group: 'Modify', macKey: '', winKey: '' },
   // Offset: 'F' is SketchUp's real offset key.
   { name: 'Offset', label: msg({ context: 'tool', message: 'Offset' }), group: 'Modify', macKey: 'F', winKey: 'F' },

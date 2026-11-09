@@ -20,6 +20,7 @@ import lineCurveSvg from '@material-symbols/svg-400/outlined/line_curve.svg?raw'
 import polylineSvg from '@material-symbols/svg-400/outlined/polyline.svg?raw'
 import unfoldMoreSvg from '@material-symbols/svg-400/outlined/unfold_more.svg?raw'
 import conversionPathSvg from '@material-symbols/svg-400/outlined/conversion_path.svg?raw'
+import roundedCornerSvg from '@material-symbols/svg-400/outlined/rounded_corner.svg?raw'
 import allOutSvg from '@material-symbols/svg-400/outlined/all_out.svg?raw'
 import formatPaintSvg from '@material-symbols/svg-400/outlined/format_paint.svg?raw'
 import colorizeSvg from '@material-symbols/svg-400/outlined/colorize.svg?raw'
@@ -54,6 +55,7 @@ export type ToolName =
   | 'Arc'
   | 'Line'
   | 'Push/Pull'
+  | 'Edge Treatment'
   | 'Follow Me'
   | 'Offset'
   | 'Paint'
@@ -87,6 +89,7 @@ export const TOOL_ICON_SVG: Record<ToolName, string> = {
   'Line': polylineSvg,
   'Push/Pull': unfoldMoreSvg, // matches the up/down-arrow cursor stop-gap
   'Follow Me': conversionPathSvg,
+  'Edge Treatment': roundedCornerSvg,
   'Offset': allOutSvg, // concentric outline pushed outward
   'Paint': formatPaintSvg,
   'Position Texture': controlCameraSvg,
@@ -121,6 +124,7 @@ const CURSOR_HOTSPOT: Record<ToolName, { x: number; y: number }> = {
   'Arc': { x: 0.1, y: 0.9 },
   'Line': { x: 0.1, y: 0.9 },
   'Push/Pull': { x: 0.5, y: 0.5 },
+  'Edge Treatment': { x: 0.5, y: 0.5 },
   'Follow Me': { x: 0.25, y: 0.75 },
   'Offset': { x: 0.5, y: 0.5 },
   'Paint': { x: 0.15, y: 0.9 },

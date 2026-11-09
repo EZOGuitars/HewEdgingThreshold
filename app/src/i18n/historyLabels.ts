@@ -46,6 +46,8 @@ const inner = (k: HistoryKind, key: string): HistoryKind | null => {
 const SIMPLE: Record<string, MessageDescriptor> = {
   edit: msg`Edit`,
   'text-3d': msg`3D Text`,
+  'chamfer-edge': msg`Chamfer edge`,
+  'roundover-edge': msg`Round over edge`,
   'follow-me': msg`Follow Me`,
   'push-pull': msg`Push/Pull`,
   'draw-on-face': msg`Draw on face`,

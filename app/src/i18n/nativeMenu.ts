@@ -134,6 +134,7 @@ export const NATIVE_MENU_LABELS: Record<string, MessageDescriptor> = {
   'tool-rotate': msg`Rotate`,
   'tool-scale': msg({ context: 'tool', message: 'Scale' }),
   'tool-pushpull': msg`Push/Pull`,
+  'tool-edge-treatment': msg`Edge Treatment`,
   'tool-follow-me': msg`Follow Me`,
   'tool-offset': msg`Offset`,
   'tool-tape-measure': msg`Tape Measure`,

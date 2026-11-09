@@ -3902,6 +3902,14 @@ fn main() {
                 Some("CmdOrCtrl+="),
                 Some("P"),
             )?;
+            let tool_edge_treatment = check_item(
+                handle,
+                &mut checks,
+                "tool-edge-treatment",
+                lbl!("tool-edge-treatment"),
+                None,
+                None,
+            )?;
             let tool_follow_me = check_item(
                 handle,
                 &mut checks,
@@ -3997,6 +4005,7 @@ fn main() {
                     .item(&tool_scale)
                     .separator()
                     .item(&tool_pushpull)
+                    .item(&tool_edge_treatment)
                     .item(&tool_follow_me)
                     .item(&tool_offset)
                     .item(&tool_slice)
@@ -4634,6 +4643,7 @@ fn main() {
                 "tool-rotate" => "tool-rotate",
                 "tool-scale" => "tool-scale",
                 "tool-pushpull" => "tool-pushpull",
+                "tool-edge-treatment" => "tool-edge-treatment",
                 "tool-follow-me" => "tool-follow-me",
                 "tool-offset" => "tool-offset",
                 "tool-tape-measure" => "tool-tape-measure",

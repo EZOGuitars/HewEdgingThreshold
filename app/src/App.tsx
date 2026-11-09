@@ -252,6 +252,7 @@ export const TOOL_MENU_IDS: Record<string, string> = {
   Line: 'draw-line',
   'Push/Pull': 'tool-pushpull',
   'Follow Me': 'tool-follow-me',
+  'Edge Treatment': 'tool-edge-treatment',
   Offset: 'tool-offset',
   Paint: 'tool-paint',
   'Position Texture': 'tool-position-texture',
@@ -5611,6 +5612,7 @@ export default function App() {
       case 'tool-arc':       setActiveTool('Arc'); break
       case 'tool-line':      setActiveTool('Line'); break
       case 'tool-pushpull':  setActiveTool('Push/Pull'); break
+      case 'tool-edge-treatment': setActiveTool('Edge Treatment'); break
       case 'tool-follow-me': setActiveTool('Follow Me'); break
       case 'tool-offset':    setActiveTool('Offset'); break
       case 'tool-paint':     setActiveTool('Paint'); break
