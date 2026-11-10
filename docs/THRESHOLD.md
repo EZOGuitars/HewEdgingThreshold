@@ -83,7 +83,7 @@ pnpm --dir app i18n:check
 pnpm --dir app build
 ```
 
-Generate the Node WASM package first as above. Browser tests are in `app/e2e/edge-treatment.spec.ts`; run under Hew's existing Playwright/dev-server configuration with a supported installed browser. Worker transport tests additionally validate the production worker artifact. STL stores no physical units; Hew exports millimeters. Supply 0.001 meters per STL unit when importing these files into an external unit-aware workflow. Do not infer physical accuracy merely from correct unit conversion.
+Generate the Node WASM package first as above. Run `node tools/replay-runner/threshold-benchmark.mjs` for the portable geometry timing harness; it reports measurements without asserting hardware-specific timing limits. Browser tests are in `app/e2e/edge-treatment.spec.ts`; run under Hew's existing Playwright/dev-server configuration with a supported installed browser. Worker transport tests additionally validate the production worker artifact. STL stores no physical units; Hew exports millimeters. Supply 0.001 meters per STL unit when importing these files into an external unit-aware workflow. Do not infer physical accuracy merely from correct unit conversion.
 
 ## Unsupported cases and reporting bugs
 
