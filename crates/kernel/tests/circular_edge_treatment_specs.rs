@@ -77,3 +77,26 @@ fn coarse_source_and_overlapping_bands_refuse() {
     ));
     assert!(edge_treatment::chamfer_edges(&s, &edges(&s, true), 0.05).is_err());
 }
+
+#[test]
+fn circular_frame_comes_from_the_cap_and_cylinder_not_global_axes() {
+    let mut source = cylinder(64);
+    let selected = edges(&source, true);
+    source
+        .apply_transform(
+            &kernel::Transform::rotation(Vec3::new(1., 2., 3.), 0.73)
+                .unwrap()
+                .then(&kernel::Transform::translation(Vec3::new(
+                    0.03, -0.02, 0.01,
+                ))),
+        )
+        .unwrap();
+    let result = edge_treatment::roundover_edges(&source, &selected, 0.003, 0.0003).unwrap();
+    result.result.object.validate().unwrap();
+    for v in result.result.object.vertices().values() {
+        for f in source.faces().values() {
+            assert!(f.plane.signed_distance(v.position) <= kernel::tol::PLANE_DIST);
+        }
+    }
+    assert!((result.result.removed_volume - result.result.expected_removed_volume).abs() < 1e-12);
+}

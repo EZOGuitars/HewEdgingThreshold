@@ -514,3 +514,26 @@ it('stops automatic repeated expensive evaluations while preserving explicit Pre
   f.tool.cancel()
   clock.mockRestore()
 })
+
+it('keeps all Threshold precision examples independent of slider increments', () => {
+  const f=fixture();f.tool.onPointerDown(snap,ray)
+  for(const [text,meters] of [
+    ['0.0125"',0.0125*0.0254],['0.1875"',0.1875*0.0254],['0.2500"',0.25*0.0254],
+    ['0.3175 mm',0.3175*0.001],['6.3500 mm',6.35*0.001],
+  ] as const) {
+    f.tool.configure({distance:text});vi.advanceTimersByTime(180)
+    expect(f.scene.prepare_chamfer).toHaveBeenLastCalledWith(1n,2n,meters)
+    expect(f.state().distance).toBe(text)
+  }
+  f.tool.cancel()
+})
+it('uses the existing face picker when a circular center snap masks the cap', () => {
+  const f=fixture(), free=vi.fn(), pick=vi.fn(()=>({object:()=>1n,face:()=>9n,instance:()=>undefined,free}))
+  Object.assign(f.scene,{pick_face:pick})
+  f.tool.selectFacePerimeter()
+  f.tool.onPointerDown({x:0,y:0,z:0,kind:'center'},ray)
+  expect(pick).toHaveBeenCalledWith(...ray.origin,...ray.direction)
+  expect(f.state().target?.edges).toEqual(['2','3','4','5'])
+  expect(free).toHaveBeenCalledOnce()
+  f.tool.cancel()
+})

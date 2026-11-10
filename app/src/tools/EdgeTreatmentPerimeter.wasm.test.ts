@@ -104,7 +104,7 @@ it('refuses an attributed circular cap without changing the model or history', (
     const before=scene.save(),depth=scene.undo_depth()
     let refusal=''
     try {scene.prepare_roundover_edges(object,edges,0.003,0.00002)} catch(error) {refusal=String(error)}
-    expect(refusal).toMatch(/^UnsupportedCurvedBoundary:/)
+    expect(refusal).toMatch(/^SourceResolution:/)
     expect(scene.save()).toEqual(before);expect(scene.undo_depth()).toBe(depth)
   } finally {scene.free()}
 })

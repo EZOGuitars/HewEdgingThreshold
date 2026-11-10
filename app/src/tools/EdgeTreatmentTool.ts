@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { EdgeTreatmentPreviewRunner, type PreviewResult } from './edgeTreatmentPreview'
 import { t } from '@lingui/core/macro'
 import { parseKernelErrorCode } from '../kernelErrors'
 import type { Scene, DocChangeJs } from '../wasm/loader'
@@ -44,6 +45,7 @@ export interface TreatmentState {
   error: string | null
   info: TreatmentInfo | null
   acknowledged: boolean
+  previewMetrics?: { computeMs: number; memoryBytes: number }
   manualPreview?: boolean
   dimensionMeters?: number
   limits?: { maximum: number; certainty: 'conservative'; segments_at_maximum: number } | null
@@ -79,8 +81,12 @@ export function treatmentError(error: unknown): string {
       return t`The preview is no longer current. Select the edge again and regenerate it.`
     case 'InsufficientClearance':
       return t`The cut reaches another face. Reduce the distance or radius.`
+    case 'PreviewWorkerFailed':
+      return t`Background preview is unavailable. Press Preview to validate synchronously; the original model is unchanged.`
+    case 'SourceResolution':
+      return t`The source circle is too coarsely segmented for this chord tolerance. Draw a finer circle or increase the chord error.`
     case 'UnsupportedCurvedBoundary':
-      return t`Circular and mixed curved perimeters need a certified curved evaluator. The source remains unchanged.`
+      return t`Select a complete supported circular cap. Mixed or irregular curved boundaries are not supported.`
     case 'UnsupportedBox':
       return t`Select a complete supported convex cap perimeter, or edges on an unmodified rectangular solid. Nonconvex solids are not supported.`
     case 'InvalidSelection':
@@ -105,6 +111,10 @@ export class EdgeTreatmentTool implements Tool {
   private meshGroup = new THREE.Group()
   private edgeGroup = new THREE.Group()
   private handle: number | null = null
+  private previewRunner = new EdgeTreatmentPreviewRunner()
+  private revision = 0
+  private workerUnavailable = false
+  private workerReady: { source: Uint8Array; request: string } | null = null
   private timer: ReturnType<typeof setTimeout> | null = null
   // Display formatting has a finite precision ceiling. Never reparse its
   // rounded text after a unit switch; only an actual field edit replaces this.
@@ -184,6 +194,18 @@ export class EdgeTreatmentTool implements Tool {
   }
   clearSelection(): void { this.reset() }
   onPointerDown(snap: Snap | null, _ray: Ray): void {
+    // A circle-center snap can outrank the cap even in face-pick mode. Resolve
+    // the actual face under the ray, rather than treating a curve/center ID as
+    // a face or changing shared inference priorities for every modeling tool.
+    if (this.state.pickingFace && snap?.elementKind !== 'face' && this.scene.pick_face) {
+      const hit = this.scene.pick_face(..._ray.origin, ..._ray.direction)
+      if (hit) {
+        try {
+          snap = { x: snap?.x ?? 0, y: snap?.y ?? 0, z: snap?.z ?? 0, kind: 'on-face',
+            object: hit.object(), element: hit.face(), elementKind: 'face', instance: hit.instance() }
+        } finally { hit.free() }
+      }
+    }
     this.clearTimer()
     this.release()
     this.state.info = null
@@ -201,7 +223,7 @@ export class EdgeTreatmentTool implements Tool {
     }
     const face = this.state.pickingFace
     if (snap?.object === undefined || snap.element === undefined || snap.elementKind !== (face ? 'face' : 'edge')) {
-      this.state.error = face ? t`Click a rectangular solid face.` : t`Click the middle of a straight solid edge.`
+      this.state.error = face ? t`Click a supported planar cap face.` : t`Click the middle of a straight solid edge.`
       this.state.phase = 'error'
       this.emit()
       return
@@ -278,6 +300,9 @@ export class EdgeTreatmentTool implements Tool {
     this.timer = null
   }
   private release(): void {
+    ++this.revision
+    this.previewRunner.cancel()
+    this.workerReady = null
     if (this.handle !== null) {
       try {
         this.scene.discard_edge_treatment(this.handle)
@@ -328,6 +353,44 @@ export class EdgeTreatmentTool implements Tool {
     if (!this.state.manualPreview) this.timer = setTimeout(() => this.generate(), 180)
   }
   generate(): void {
+    if (typeof Worker !== 'undefined' && !this.workerUnavailable) { this.generateAsync(); return }
+    this.generateLocal()
+  }
+  private sameSource(source: Uint8Array, request: string): boolean {
+    const current = this.scene.save()
+    const target = this.state.target, input = this.input()
+    if (!target || !input || source.length !== current.length || !source.every((v, i) => v === current[i])) return false
+    try {
+      return this.scene.edge_treatment_request_json(target.object, BigUint64Array.from(target.edges?.map(BigInt) ?? [target.edge]), this.state.mode === 'roundover', this.state.mode === 'roundover' ? input.radius : input.distance, input.chord) === request
+    } catch { return false }
+  }
+  private generateAsync(): void {
+    this.clearTimer()
+    if (!this.active || !this.state.target || this.state.pickingFace) return
+    const input = this.input()
+    if (!input) { this.requestPreview(); return }
+    this.release()
+    const revision = this.revision
+    const target = this.state.target
+    const edges = target.edges?.map(BigInt) ?? [target.edge]
+    this.state.phase = 'pending'; this.state.info = null; this.state.error = null; this.state.acknowledged = false
+    this.emit()
+    try {
+      const source = this.scene.save()
+      const request = this.scene.edge_treatment_request_json(target.object, BigUint64Array.from(edges), this.state.mode === 'roundover', this.state.mode === 'roundover' ? input.radius : input.distance, input.chord)
+      void this.previewRunner.run({ source, request, limits: this.limitsKey === null }).then(result => {
+        if (!this.active || revision !== this.revision) return
+        if (!this.sameSource(source, request)) { this.documentChanged(); return }
+        this.generateLocal({ ...result, source, request })
+      }, error => {
+        if (this.active && revision === this.revision) {
+          if (String(error).includes('PreviewWorkerFailed')) { this.workerUnavailable = true; this.state.manualPreview = true }
+          this.fail(error)
+        }
+      })
+    } catch (error) { this.fail(error) }
+  }
+  private generateLocal(result?: PreviewResult & { source: Uint8Array; request: string }): void {
     this.clearTimer()
     if (!this.active || !this.state.target || this.state.pickingFace) return
     const started = performance.now()
@@ -345,25 +408,29 @@ export class EdgeTreatmentTool implements Tool {
     clearPreview(this.meshGroup)
     this.emit()
     try {
+      if (result?.limits) this.state.limits = JSON.parse(result.limits)
       if (this.limitsKey === null) {
         this.limitsKey = JSON.stringify([String(object), edges.map(String), this.state.mode, input.chord])
         try {
-          const limits = JSON.parse(this.scene.edge_treatment_limits_json(object, BigUint64Array.from(edges), this.state.mode === 'roundover', input.chord))
-          if (limits.certainty === 'conservative' && Number.isFinite(limits.maximum) && limits.maximum > 0)
+          const limits = result ? this.state.limits : JSON.parse(this.scene.edge_treatment_limits_json(object, BigUint64Array.from(edges), this.state.mode === 'roundover', input.chord))
+          if (limits && limits.certainty === 'conservative' && Number.isFinite(limits.maximum) && limits.maximum > 0)
             this.state.limits = limits
         } catch { this.state.limits = null } // Text entry still uses full native validation.
       }
-      const handle =
+      const handle = result ? (JSON.parse(result.info) as TreatmentInfo).handle : (
         this.state.mode === 'chamfer'
           ? edges.length === 1
             ? this.scene.prepare_chamfer(object, edge, input.distance)
             : this.scene.prepare_chamfer_edges(object, BigUint64Array.from(edges), input.distance)
           : edges.length === 1
             ? this.scene.prepare_roundover(object, edge, input.radius, input.chord)
-            : this.scene.prepare_roundover_edges(object, BigUint64Array.from(edges), input.radius, input.chord)
-      // Success retires the old Scene slot; never discard that old token.
-      this.handle = handle
-      const info = JSON.parse(this.scene.edge_treatment_info_json(handle)) as TreatmentInfo
+            : this.scene.prepare_roundover_edges(object, BigUint64Array.from(edges), input.radius, input.chord))
+      this.handle = result ? null : handle
+      const info = JSON.parse(result ? result.info : this.scene.edge_treatment_info_json(handle)) as TreatmentInfo
+      if (result) {
+        // Worker-local handles are display-only. Main IDs remain the selection.
+        info.object = String(object); info.edge = String(edge); info.edges = edges.map(String)
+      }
       const dimensionsMatch =
         this.state.mode === 'chamfer'
           ? info.operation.distance === input.distance
@@ -377,7 +444,10 @@ export class EdgeTreatmentTool implements Tool {
         info.operation.kind !== this.state.mode
       )
         throw new Error('InvalidCandidateHandle: mismatched preview')
-      const mesh = this.scene.edge_treatment_mesh(handle)
+      const mesh = result ? {
+        positions: () => result.mesh.positions, normals: () => result.mesh.normals,
+        indices: () => result.mesh.indices, edge_positions: () => result.mesh.edges, free: () => {},
+      } : this.scene.edge_treatment_mesh(handle)
       const resources: (THREE.BufferGeometry | THREE.Material)[] = []
       let attached = false
       try {
@@ -425,7 +495,11 @@ export class EdgeTreatmentTool implements Tool {
       // Coalescing cannot interrupt synchronous WASM. After a slow evaluation,
       // require explicit Preview rather than repeat blocking work on every drag.
       // A resumable/worker evaluator remains necessary for fully live heavy jobs.
-      if (performance.now() - started > 100) this.state.manualPreview = true
+      if (!result && performance.now() - started > 100) this.state.manualPreview = true
+      if (result) {
+        this.workerReady = { source: result.source, request: result.request }
+        this.state.previewMetrics = { computeMs: result.elapsedMs, memoryBytes: result.memoryBytes }
+      }
       this.state.info = info
       this.state.phase = 'ready'
       this.state.error = null
@@ -436,6 +510,26 @@ export class EdgeTreatmentTool implements Tool {
     }
   }
   apply(): void {
+    if (this.workerReady && this.state.phase === 'ready' && this.state.target && this.state.info) {
+      if (this.state.info.warnings.length && !this.state.acknowledged) return
+      const job = this.workerReady
+      this.workerReady = null
+      try {
+        if (!this.sameSource(job.source, job.request)) throw new Error('StaleCandidate:')
+        const input = this.input()
+        if (!input) throw new Error('InvalidDistance:')
+        const { object, edge } = this.state.target
+        const edges = BigUint64Array.from(this.state.target.edges?.map(BigInt) ?? [edge])
+        // Final native candidate is rebuilt/certified against the live document;
+        // a worker's Scene handles or untrusted mesh never enter document history.
+        const handle = this.state.mode === 'chamfer'
+          ? this.scene.prepare_chamfer_edges(object, edges, input.distance)
+          : this.scene.prepare_roundover_edges(object, edges, input.radius, input.chord)
+        this.handle = handle
+        this.state.info = JSON.parse(this.scene.edge_treatment_info_json(handle))
+      } catch (error) { this.release(); this.fail(error); return }
+    }
+
     if (
       this.state.phase !== 'ready' ||
       this.handle === null ||

@@ -9,6 +9,7 @@ import type { Scene } from '../wasm/loader'
 const path = new URL('../../../tools/replay-runner/pkg-node/wasm_api.js', import.meta.url)
 const pairs = [
   [0.125, 3.175],
+  [0.1875, 4.7625],
   [0.25, 6.35],
   [0.375, 9.525],
   [0.5, 12.7],

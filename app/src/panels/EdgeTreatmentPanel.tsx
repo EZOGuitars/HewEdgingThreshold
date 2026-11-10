@@ -131,7 +131,8 @@ export function EdgeTreatmentPanel({
     >
       <h3 style={{ marginTop: 0 }}>{t`Edge Treatment`}</h3>
       <p>{t`Click an edge to replace the selection. Ctrl/Command-click adds or removes edges on the same solid.`}</p>
-      {state.mode === 'roundover' && <p>{t`Two-edge junctions have a visible miter seam. Three-edge junctions use faceted spherical corners.`}</p>}
+      <p>{t`For a complete polygonal or circular cap, choose Select face perimeter, then click the cap.`}</p>
+      {state.mode === 'roundover' && <p>{t`Roundovers are faceted. Connected box edges use miter seams or faceted spherical corners.`}</p>}
       <div style={{ display: 'flex', gap: 8 }}>
         <button style={control} type="button" onClick={() => tool.selectFacePerimeter()}>{t`Select face perimeter`}</button>
         <button style={control} type="button" onClick={() => tool.clearSelection()}>{t`Clear`}</button>

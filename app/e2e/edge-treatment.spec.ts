@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { writeFile } from 'node:fs/promises'
 import { inspectClosedStl } from './stlIntegrity'
 
 declare global {
@@ -331,4 +332,109 @@ test('generalized trapezoid: native-bound slider, successive opposite perimeters
   expect(final).not.toEqual(original)
   await page.evaluate(()=>{window.__hew_test!.undo();window.__hew_test!.undo()})
   expect(await page.evaluate(()=>window.__hew_test!.exportStl(0)!.bytes)).toEqual(original)
+})
+
+for (const first of ['chamfer','roundover'] as const) test(`Threshold cylinder: ${first}, opposite roundover and isolated history`, async ({page}) => {
+  test.setTimeout(120_000)
+  await page.goto('/'); await page.waitForFunction(()=>window.__hew_test?.isReady()===true)
+  await page.evaluate(()=>{
+    const h=window.__hew_test!;h.setLengthUnit('mm')
+    const circle=h.drawCircle([0,0,0],0.05,64);h.extrudeRegion(circle.sketch,circle.region,0.04)
+    h.setCamera({position:[0.25,-0.25,0.25],target:[0,0,0.02],up:[0,0,1],fovDeg:45});h.saveWithCameraState()
+  })
+  const original=await page.evaluate(()=>window.__hew_test!.exportStl(0)!.bytes)
+  await page.getByRole('radio',{name:'Edge Treatment',exact:true}).click()
+  const panel=page.getByRole('region',{name:'Edge Treatment'})
+  for(const upper of [true,false]) {
+    if(!upper) await page.evaluate(()=>{const h=window.__hew_test!;h.setCamera({position:[0.25,-0.25,-0.25],target:[0,0,0.02],up:[0,0,1],fovDeg:45});h.saveWithCameraState()})
+    const mode=upper?first:'roundover'
+    await panel.getByLabel('Operation').selectOption(mode)
+    await panel.getByLabel(mode==='roundover'?'Radius':'Distance',{exact:true}).fill(upper?'3 mm':'2 mm')
+    if(mode==='roundover') await panel.getByLabel('Maximum chord error',{exact:true}).fill('0.3 mm')
+    await panel.getByRole('button',{name:'Select face perimeter',exact:true}).click()
+    const rect=await page.locator('canvas').first().boundingBox();if(!rect)throw Error('missing canvas')
+    const p=await page.evaluate(z=>window.__hew_test!.worldToScreen([0,0,z]),upper?0.04:0)
+    await page.mouse.move(rect.x+p.x-10,rect.y+p.y-10);await page.mouse.move(rect.x+p.x,rect.y+p.y,{steps:3});await page.mouse.click(rect.x+p.x,rect.y+p.y)
+    await expect(panel.getByText('Selected edges: 64',{exact:true})).toBeVisible()
+    await expect(panel.getByRole('button',{name:'Apply',exact:true})).toBeEnabled({timeout:60000})
+    await expect(panel.getByRole('slider')).toBeVisible()
+    await panel.getByRole('button',{name:'Apply',exact:true}).click()
+    const measured=inspectClosedStl(await page.evaluate(()=>window.__hew_test!.exportStl(0)!.bytes))
+    expect(Math.abs(measured.max[2]-40)).toBeLessThan(0.00002)
+    expect(Math.abs(measured.min[2])).toBeLessThan(0.00002)
+  }
+  await page.evaluate(()=>{window.__hew_test!.undo();window.__hew_test!.undo()})
+  expect(await page.evaluate(()=>window.__hew_test!.exportStl(0)!.bytes)).toEqual(original)
+})
+
+test('Threshold worker: fine all-edge previews keep the main thread responsive and cancel cleanly',async({page},info)=>{
+  test.setTimeout(120_000)
+  await page.goto('/');await page.waitForFunction(()=>window.__hew_test?.isReady()===true)
+  await page.evaluate(async()=>{
+    const {loadKernel}=await import('/src/wasm/loader.ts')
+    const {EdgeTreatmentTool}=await import('/src/tools/EdgeTreatmentTool.ts')
+    const THREE=await import('/node_modules/.vite/deps/three.js')
+    const scene=(await loadKernel()).newScene(),sketch=scene.begin_ground_sketch()
+    scene.sketch_begin_gesture(sketch);const p=[[0,0],[.1,0],[.1,.06],[0,.06]]
+    p.forEach((a,i)=>{const b=p[(i+1)%4];scene.sketch_add_segment(sketch,...a,0,...b,0)})
+    scene.sketch_end_gesture(sketch);const object=scene.extrude_region(sketch,scene.sketch_regions(sketch)[0],.02)
+    const rays=[[.05,.03,1,0,0,-1],[.05,.03,-1,0,0,1],[-1,.03,.01,1,0,0],[1,.03,.01,-1,0,0],[.05,-1,.01,0,1,0],[.05,1,.01,0,-1,0]]
+    const edges=[...new Set(rays.flatMap(r=>{const hit=scene.pick_face(...r)!;try{return [...scene.edge_treatment_face_edges(object,hit.face())]}finally{hit.free()}}))]
+    // Measure modeling responsiveness after the initial application paint;
+    // do not attribute cold software-renderer startup to a geometry job.
+    await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))
+    const longTasks:{start:number;duration:number}[]=[]
+    const observer=new PerformanceObserver(list=>{for(const entry of list.getEntries())longTasks.push({start:entry.startTime,duration:entry.duration})})
+    observer.observe({type:'longtask'})
+    const NativeWorker=window.Worker;let active=0,peak=0,created=0
+    window.Worker=class extends NativeWorker {
+      private live=true
+      constructor(...args:ConstructorParameters<typeof Worker>){super(...args);active++;created++;peak=Math.max(peak,active)}
+      terminate(){if(this.live){this.live=false;active--}super.terminate()}
+    }
+    let state:any=null,ticks=0,frame=0,lastFrame=performance.now(),maxFrameGapMs=0
+    const heartbeat=()=>{const now=performance.now();maxFrameGapMs=Math.max(maxFrameGapMs,now-lastFrame);lastFrame=now;ticks++;frame=requestAnimationFrame(heartbeat)};frame=requestAnimationFrame(heartbeat)
+    const tool=new EdgeTreatmentTool(scene,new THREE.Group(),()=>{},s=>{state=s},()=>{})
+    tool.activate();tool.configure({mode:'roundover',radius:'6.35 mm',chord:'0.01 mm'})
+    const select=()=>edges.forEach((edge,i)=>{tool.setSelectionModifier(i>0);tool.onPointerDown({x:0,y:0,z:0,kind:'on-edge',object,element:edge,elementKind:'edge'},{origin:[0,0,1],direction:[0,0,-1]})})
+    const selectionStart=performance.now();select();const selectionSetupMs=performance.now()-selectionStart
+    // The fixture selects all 12 edges in one synthetic task. Start the
+    // preview-frame gate after that setup; report its cost separately.
+    lastFrame=performance.now();maxFrameGapMs=0;ticks=0
+    const before=scene.save(),depth=scene.undo_depth(),started=performance.now(),startTicks=ticks
+    const dispatchStart=performance.now();tool.generate();const dispatchMs=performance.now()-dispatchStart
+    const input=document.createElement('input');input.setAttribute('aria-label','Threshold heartbeat');input.style.cssText='position:fixed;right:20px;top:80px;z-index:1000';document.body.append(input);input.focus()
+    ;(window as any).__thresholdPerf={
+      read:()=>({phase:state?.phase,error:state?.error,selectionSetupMs,dispatchMs,longTasks:longTasks.slice(-10),maxFrameGapMs,ticks:ticks-startTicks,elapsedMs:performance.now()-started,active,peak,created,geometryPure:(()=>{const after=scene.save();return before.length===after.length&&before.every((v,i)=>v===after[i])})(),metrics:state?.previewMetrics,radius:state?.info?.operation?.radius,pure:(()=>{const after=scene.save();return depth===scene.undo_depth()&&before.length===after.length&&before.every((v,i)=>v===after[i])})()}),
+      supersede:()=>{if(!state?.target)select();tool.configure({radius:'6.35 mm',chord:'0.01 mm'});tool.generate();setTimeout(()=>tool.configure({radius:'2 mm',chord:'0.05 mm'}),100)},
+      cancel:()=>{for(let i=0;i<10;i++){select();tool.configure({radius:'6.35 mm',chord:'0.01 mm'});tool.generate();tool.clearSelection()}},
+      reloadDuringPreview:()=>{select();tool.configure({radius:'6.35 mm',chord:'0.01 mm'});tool.generate();setTimeout(()=>scene.load(scene.save()),100)},
+      apply:()=>{const t=performance.now();tool.apply();const elapsed=performance.now()-t;scene.scene_undo().free();return elapsed},
+      dispose:()=>{tool.cancel();scene.free();cancelAnimationFrame(frame);observer.disconnect();input.remove();window.Worker=NativeWorker},
+    }
+  })
+  try {
+    const inputStarted=Date.now()
+    await page.keyboard.insertText('UI remains responsive')
+    const inputLatencyMs=Date.now()-inputStarted
+    await expect(page.getByLabel('Threshold heartbeat')).toHaveValue('UI remains responsive')
+    await page.waitForFunction(()=>(window as any).__thresholdPerf.read().phase==='ready',null,{timeout:60000})
+    const first=await page.evaluate(()=>(window as any).__thresholdPerf.read())
+    await writeFile(info.outputPath('threshold-worker-first.json'),JSON.stringify({...first,inputLatencyMs},null,2))
+    expect(first.pure).toBe(true);expect(first.ticks).toBeGreaterThan(5);expect(first.peak).toBe(1);expect(first.active).toBe(0);expect(inputLatencyMs).toBeLessThan(400);expect(first.dispatchMs).toBeLessThan(100);expect(first.longTasks.every((task:{duration:number})=>task.duration<100)).toBe(true)
+    const applyMs=await page.evaluate(()=>(window as any).__thresholdPerf.apply())
+    await page.evaluate(()=>(window as any).__thresholdPerf.supersede())
+    await page.waitForFunction(()=>(window as any).__thresholdPerf.read().phase==='ready'&&(window as any).__thresholdPerf.read().radius===0.002,null,{timeout:60000})
+    await page.evaluate(()=>(window as any).__thresholdPerf.cancel())
+    await page.waitForTimeout(300)
+    const final=await page.evaluate(()=>(window as any).__thresholdPerf.read())
+    expect(final.active).toBe(0);expect(final.phase).toBe('select');expect(final.created).toBeGreaterThanOrEqual(12)
+    await page.evaluate(()=>(window as any).__thresholdPerf.reloadDuringPreview())
+    await page.waitForFunction(()=>(window as any).__thresholdPerf.read().phase==='error',null,{timeout:60000})
+    const stale=await page.evaluate(()=>(window as any).__thresholdPerf.read())
+    expect(stale.error).toContain('no longer current');expect(stale.active).toBe(0);expect(stale.geometryPure).toBe(true)
+    const path=info.outputPath('threshold-worker-timing.json')
+    await writeFile(path,JSON.stringify({first,inputLatencyMs,applyMs,final,stale},null,2))
+    await info.attach('threshold-worker-timing.json',{path,contentType:'application/json'})
+  }finally{await page.evaluate(()=>(window as any).__thresholdPerf.dispose())}
 })

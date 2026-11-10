@@ -1189,6 +1189,10 @@ msgctxt "view"
 msgid "Back"
 msgstr "Back"
 
+#: src/tools/EdgeTreatmentTool.ts
+msgid "Background preview is unavailable. Press Preview to validate synchronously; the original model is unchanged."
+msgstr "Background preview is unavailable. Press Preview to validate synchronously; the original model is unchanged."
+
 #: src/health/healthCopy.ts
 msgid "Behind"
 msgstr "Behind"
@@ -1463,8 +1467,8 @@ msgid "Circle"
 msgstr "Circle"
 
 #: src/tools/EdgeTreatmentTool.ts
-msgid "Circular and mixed curved perimeters need a certified curved evaluator. The source remains unchanged."
-msgstr "Circular and mixed curved perimeters need a certified curved evaluator. The source remains unchanged."
+#~ msgid "Circular and mixed curved perimeters need a certified curved evaluator. The source remains unchanged."
+#~ msgstr "Circular and mixed curved perimeters need a certified curved evaluator. The source remains unchanged."
 
 #: src/palette/registry.ts
 msgid "clean up"
@@ -1564,8 +1568,8 @@ msgstr "Click a point to set the baseline direction."
 #~ msgstr "Click a rectangular solid face to select its perimeter."
 
 #: src/tools/EdgeTreatmentTool.ts
-msgid "Click a rectangular solid face."
-msgstr "Click a rectangular solid face."
+#~ msgid "Click a rectangular solid face."
+#~ msgstr "Click a rectangular solid face."
 
 #: src/tools/EditVertexTool.ts
 msgid "Click a sketch point to pick it up."
@@ -1586,6 +1590,10 @@ msgstr "Click a start point for the angle. Shift or → / ← / ↑ lock the rot
 #: src/panels/EdgeTreatmentPanel.tsx
 msgid "Click a supported planar cap face to select its perimeter."
 msgstr "Click a supported planar cap face to select its perimeter."
+
+#: src/tools/EdgeTreatmentTool.ts
+msgid "Click a supported planar cap face."
+msgstr "Click a supported planar cap face."
 
 #: src/tools/PositionTextureTool.ts
 msgid "Click a textured face to position its texture."
@@ -3411,6 +3419,10 @@ msgstr "For a 90° corner, an equal-distance chamfer removes the corner and repl
 #: src/panels/EdgeTreatmentPanel.tsx
 msgid "For a 90° corner, the radius also equals the distance from the original sharp edge to where the roundover meets each adjacent face."
 msgstr "For a 90° corner, the radius also equals the distance from the original sharp edge to where the roundover meets each adjacent face."
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "For a complete polygonal or circular cap, choose Select face perimeter, then click the cap."
+msgstr "For a complete polygonal or circular cap, choose Select face perimeter, then click the cap."
 
 #: src/panels/EdgeTreatmentPanel.tsx
 msgid "For example, a 0.25-inch chamfer extends 0.25 inches along each adjoining face. The sloped bevel itself is approximately 0.354 inches wide."
@@ -6922,6 +6934,10 @@ msgstr "Roundover"
 msgid "Roundover radius"
 msgstr "Roundover radius"
 
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Roundovers are faceted. Connected box edges use miter seams or faceted spherical corners."
+msgstr "Roundovers are faceted. Connected box edges use miter seams or faceted spherical corners."
+
 #: src/viewport/Viewport.tsx
 msgid "Running without graphics acceleration — large models will be slow."
 msgstr "Running without graphics acceleration — large models will be slow."
@@ -7288,6 +7304,10 @@ msgstr "Select"
 #: src/panels/ObjectInfoPanel.tsx
 msgid "Select {segLabel}"
 msgstr "Select {segLabel}"
+
+#: src/tools/EdgeTreatmentTool.ts
+msgid "Select a complete supported circular cap. Mixed or irregular curved boundaries are not supported."
+msgstr "Select a complete supported circular cap. Mixed or irregular curved boundaries are not supported."
 
 #: src/tools/EdgeTreatmentTool.ts
 msgid "Select a complete supported convex cap perimeter, or edges on an unmodified rectangular solid. Nonconvex solids are not supported."
@@ -8681,6 +8701,10 @@ msgstr "The SketchUp file can’t hold everything exactly"
 msgid "The slicing plane doesn't pass through the object. Position the cut so it goes through the solid."
 msgstr "The slicing plane doesn't pass through the object. Position the cut so it goes through the solid."
 
+#: src/tools/EdgeTreatmentTool.ts
+msgid "The source circle is too coarsely segmented for this chord tolerance. Draw a finer circle or increase the chord error."
+msgstr "The source circle is too coarsely segmented for this chord tolerance. Draw a finer circle or increase the chord error."
+
 #: src/tools/FollowMeTool.ts
 msgid "The sweep starts at the profile and follows the path’s shape — click to sweep it, or drag along the path for a partial sweep."
 msgstr "The sweep starts at the profile and follows the path’s shape — click to sweep it, or drag along the path for a partial sweep."
@@ -9261,8 +9285,8 @@ msgid "Two faces in this panel meet without sharing an edge, so a thickness woul
 msgstr "Two faces in this panel meet without sharing an edge, so a thickness would leave a crack inside. Draw a line where they meet, then try again."
 
 #: src/panels/EdgeTreatmentPanel.tsx
-msgid "Two-edge junctions have a visible miter seam. Three-edge junctions use faceted spherical corners."
-msgstr "Two-edge junctions have a visible miter seam. Three-edge junctions use faceted spherical corners."
+#~ msgid "Two-edge junctions have a visible miter seam. Three-edge junctions use faceted spherical corners."
+#~ msgstr "Two-edge junctions have a visible miter seam. Three-edge junctions use faceted spherical corners."
 
 #. Library list column header
 #: src/panels/library/LibraryListHead.tsx
