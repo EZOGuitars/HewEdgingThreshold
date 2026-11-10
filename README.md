@@ -1,3 +1,32 @@
+# Threshold — Hew Edge Treatment alpha
+
+Threshold is EZO Guitars' experimental Edge Treatment foundation built on
+[Hew](https://github.com/hew3d/hew). This is a development fork, not an official
+Hew release. It preserves Hew's original source history and licensing.
+
+- **Geometry:** complete convex polygonal cap perimeters; uniformly faceted
+  circular cylinder caps; compatible successive opposite-cap chamfers and roundovers.
+- **Precision:** native geometry-bound sliders, exact dimensional entry, existing
+  metric/imperial settings, explicit faceting tolerances and STL integrity checks.
+- **Preview:** isolated Web Workers, coalescing, cancellation and stale-result
+  rejection. Apply revalidates synchronously against the live document.
+- **Limits:** mixed line/arc boundaries, arbitrary nonconvex bodies, overlapping
+  blends, NURBS/G2/variable-radius fillets and arbitrary sequential edge edits
+  are unsupported. Coarse circles can refuse finer requested tolerances.
+- **Isolation:** retains `com.hew3d.Hew.EdgeTreatmentAlpha` and separate XDG state.
+  Do not install over your normal Hew application.
+
+See [Threshold build, usage and limitations](docs/THRESHOLD.md),
+[verification and release gates](docs/dev/THRESHOLD_VERIFICATION.md),
+[architecture](docs/dev/EDGE_TREATMENT_CONTROL_ENGINE_DESIGN.md), and
+[licensing/attribution](docs/THRESHOLD_NOTICES.md).
+
+The source-build release targets Fedora 45 x86_64. No tested Fedora desktop
+binary is supplied by this environment. The upstream README below is retained
+for project context; its upstream download links refer to ordinary Hew.
+
+---
+
 <p align="center">
   <img src="brand/hew-lockup-outlined.svg" alt="Hew" width="360">
 </p>

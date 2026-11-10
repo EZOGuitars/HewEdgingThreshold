@@ -1,5 +1,7 @@
 # Edge Treatment modularity audit — design review
 
+Current implementation and release gates: [Threshold verification](THRESHOLD_VERIFICATION.md). Earlier planning/checkpoint statements below are retained as historical records.
+
 Implementation status after authorization: [foundation checkpoint report](EDGE_TREATMENT_PHASE3_IMPLEMENTATION.md). The design/review below is preserved as its original planning record.
 
 ## Scope and conclusion

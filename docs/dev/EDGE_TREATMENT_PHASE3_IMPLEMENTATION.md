@@ -1,5 +1,7 @@
 # Unified Edge Treatment foundation — implementation checkpoints
 
+Current implementation and release gates: [Threshold verification](THRESHOLD_VERIFICATION.md). Earlier planning/checkpoint statements below are retained as historical records.
+
 ## Delivery scope
 
 This is an incremental Phase 3 foundation milestone, not completion of Operation Ultimate Chickening. The recoverable Phase 2 baseline is `ebb06e4f4a049a9a0c08f7d9acbe09d5c5482816`, retained by local branch `baseline/edge-treatment-phase2-ebb06e4`. The approved architecture/review documents were preserved in commit `6192b64`; the native cap-band milestone is `346244f`; controls/integration and expanded acceptance tests are committed as `09c450e`.

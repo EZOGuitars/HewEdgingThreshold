@@ -1,5 +1,7 @@
 # Phase 3 architecture and contribution-readiness review
 
+Current implementation and release gates: [Threshold verification](THRESHOLD_VERIFICATION.md). Earlier planning/checkpoint statements below are retained as historical records.
+
 Implementation status after authorization: [foundation checkpoint report](EDGE_TREATMENT_PHASE3_IMPLEMENTATION.md). The design/review below is preserved as its original planning record.
 
 Modularity constraint: see [the source-level modularity audit](EDGE_TREATMENT_MODULARITY_AUDIT.md). Retain dedicated feature strategies and adapters; shared-core extensions must be minimal, generic where justified, and reviewed before implementation.
