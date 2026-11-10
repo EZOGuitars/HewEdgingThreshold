@@ -19,6 +19,8 @@ permissions:
 
 jobs:
   probe:
+    # Fork releases must not publish or probe upstream-owned services.
+    if: github.repository == 'hew3d/hew'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

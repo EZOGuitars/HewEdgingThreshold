@@ -49,6 +49,8 @@ env:
 
 jobs:
   render:
+    # Fork releases must not publish or probe upstream-owned services.
+    if: github.repository == 'hew3d/hew'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

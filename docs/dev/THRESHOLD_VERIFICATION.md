@@ -78,3 +78,8 @@ Development-host Node release WASM, two warmups and three retained samples; prep
 | Opposite cylinder cap after first treatment | 2 / 0.3 | 132.71 / 150.45 |
 
 The final stress test used fourteen worker instances across initial evaluation, supersession, repeated cancellation and reload, with peak concurrency one and zero active workers at completion. Its source geometry remained unchanged even during the explicit identical-byte reload. WASM memory figures describe linear-memory capacity, not resident memory or total GPU/browser memory. Any serialized document change conservatively invalidates preview; saved view-state changes can require regeneration as well. A quality/precision-limited range probe can suppress a slider while exact entry remains available under full validation.
+
+
+## Release automation isolation
+
+The inherited packaging workflow reacts to any published release and targets upstream package repositories. Its root job, the upstream release/deployment root job and the upstream relay probe now require `github.repository == 'hew3d/hew'`. Dependent packaging/deployment jobs therefore skip in Threshold while upstream behavior is unchanged. Ordinary CI validation remains available. These narrowly scoped repository guards prevent Threshold publication from invoking ordinary Hew packaging or upstream service probes; they do not alter application code or licenses.

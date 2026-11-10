@@ -68,6 +68,8 @@ env:
 
 jobs:
   create-release:
+    # Fork releases must not publish or probe upstream-owned services.
+    if: github.repository == 'hew3d/hew'
     runs-on: ubuntu-latest
     outputs:
       release_id: ${{ steps.create.outputs.release_id }}
