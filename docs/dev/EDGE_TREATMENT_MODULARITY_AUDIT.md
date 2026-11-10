@@ -1,5 +1,7 @@
 # Edge Treatment modularity audit — design review
 
+Implementation status after authorization: [foundation checkpoint report](EDGE_TREATMENT_PHASE3_IMPLEMENTATION.md). The design/review below is preserved as its original planning record.
+
 ## Scope and conclusion
 
 Read-only source audit of `feature/edge-treatment` at `ebb06e4f4a049a9a0c08f7d9acbe09d5c5482816`, compared with its upstream common base `b2e5baee8b0b84d7eb3d8c8f26ff36aabf7fa42e`. This covers the complete fork implementation, not only the last integration commit. The local branch and remote feature branch were previously verified at the same SHA. No implementation, refactoring, synchronization or publishing is authorized by this review.

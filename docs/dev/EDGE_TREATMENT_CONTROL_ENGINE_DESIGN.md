@@ -1,5 +1,7 @@
 # Unified Edge Treatment controls and geometry foundation
 
+Implementation status after authorization: [foundation checkpoint report](EDGE_TREATMENT_PHASE3_IMPLEMENTATION.md). The design/review below is preserved as its original planning record.
+
 Modularity constraint: see [the source-level modularity audit](EDGE_TREATMENT_MODULARITY_AUDIT.md). Retain dedicated feature strategies and adapters; shared-core extensions must be minimal, generic where justified, and reviewed before implementation.
 
 Status: architectural and interaction proposal for review; **not implementation approval**.
