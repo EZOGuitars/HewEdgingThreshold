@@ -154,6 +154,10 @@ export interface Tool {
   onKey(ev: KeyboardEvent): void
   /** Full reset — clear all preview / ephemeral state */
   cancel(): void
+  /** Model mutation invalidates any source-bound transient candidate. */
+  documentChanged?(): void
+  /** Pointer modifiers for tools supporting additive selection. */
+  setSelectionModifier?(additive: boolean): void
   /** Human-readable name shown in the status bar */
   readonly name: string
 

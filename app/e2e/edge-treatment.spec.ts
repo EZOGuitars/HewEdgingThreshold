@@ -281,3 +281,54 @@ test('parameter help supports hover, keyboard and click without applying geometr
   await expect(panel.getByRole('button', { name: 'Apply', exact: true })).toBeDisabled()
   expect(await page.evaluate(() => window.__hew_test!.getObjectIds())).toEqual([])
 })
+
+test('generalized trapezoid: native-bound slider, successive opposite perimeters and undo', async ({ page }) => {
+  test.setTimeout(120_000)
+  await page.goto('/')
+  await page.waitForFunction(() => window.__hew_test?.isReady() === true)
+  await page.evaluate(() => {
+    const h=window.__hew_test!
+    h.setLengthUnit('mm')
+    const p: [number,number,number][]=[[0,0,0],[0.1,0,0],[0.07,0.06,0],[0.01,0.06,0],[0,0,0]]
+    const sketch=h.drawLineChain(p)
+    h.extrudeRegion(sketch.sketch,sketch.regions[0],0.04)
+    h.setCamera({position:[0.25,-0.25,0.25],target:[0.05,0.03,0.02],up:[0,0,1],fovDeg:45})
+    h.saveWithCameraState()
+  })
+  const original=await page.evaluate(()=>window.__hew_test!.exportStl(0)!.bytes)
+  await page.getByRole('radio',{name:'Edge Treatment',exact:true}).click()
+  const panel=page.getByRole('region',{name:'Edge Treatment'})
+  await panel.getByLabel('Operation').selectOption('roundover')
+  await panel.getByLabel('Maximum chord error',{exact:true}).fill('0.02 mm')
+  for(const upper of [true,false]) {
+    if(!upper) await page.evaluate(()=>{
+      const h=window.__hew_test!
+      h.setCamera({position:[0.25,-0.25,-0.25],target:[0.05,0.03,0.02],up:[0,0,1],fovDeg:45})
+      h.saveWithCameraState()
+    })
+    await panel.getByLabel('Radius',{exact:true}).fill(upper?'3 mm':'0.0125"')
+    await panel.getByRole('button',{name:'Select face perimeter',exact:true}).click()
+    const rect=await page.locator('canvas').first().boundingBox()
+    if(!rect) throw Error('missing canvas')
+    const point=await page.evaluate(z=>window.__hew_test!.worldToScreen([0.05,0.03,z]),upper?0.04:0)
+    await page.mouse.move(rect.x+point.x-10,rect.y+point.y-10)
+    await page.mouse.move(rect.x+point.x,rect.y+point.y,{steps:3})
+    await page.mouse.click(rect.x+point.x,rect.y+point.y)
+    await expect(panel.getByText('Selected edges: 4',{exact:true})).toBeVisible()
+    await expect(panel.getByRole('button',{name:'Apply',exact:true})).toBeEnabled()
+    const slider=panel.getByRole('slider',{name:'Adjust roundover radius'})
+    await expect(slider).toBeVisible()
+    if(upper) {
+      const before=await panel.getByLabel('Radius',{exact:true}).inputValue()
+      await slider.focus();await slider.press('ArrowRight')
+      await expect(panel.getByLabel('Radius',{exact:true})).not.toHaveValue(before)
+      await expect(panel.getByRole('button',{name:'Apply',exact:true})).toBeEnabled()
+    }
+    await panel.getByRole('button',{name:'Apply',exact:true}).click()
+    inspectClosedStl(await page.evaluate(()=>window.__hew_test!.exportStl(0)!.bytes))
+  }
+  const final=await page.evaluate(()=>window.__hew_test!.exportStl(0)!.bytes)
+  expect(final).not.toEqual(original)
+  await page.evaluate(()=>{window.__hew_test!.undo();window.__hew_test!.undo()})
+  expect(await page.evaluate(()=>window.__hew_test!.exportStl(0)!.bytes)).toEqual(original)
+})

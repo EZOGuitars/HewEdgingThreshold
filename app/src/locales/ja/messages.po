@@ -959,6 +959,14 @@ msgstr ""
 msgid "Address:"
 msgstr ""
 
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Adjust chamfer distance"
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Adjust roundover radius"
+msgstr ""
+
 #: src/settings/SettingsWindow.tsx
 msgid "Advanced"
 msgstr ""
@@ -1454,6 +1462,10 @@ msgctxt "drawn shape"
 msgid "Circle"
 msgstr ""
 
+#: src/tools/EdgeTreatmentTool.ts
+msgid "Circular and mixed curved perimeters need a certified curved evaluator. The source remains unchanged."
+msgstr ""
+
 #: src/palette/registry.ts
 msgid "clean up"
 msgstr ""
@@ -1548,8 +1560,8 @@ msgid "Click a point to set the baseline direction."
 msgstr ""
 
 #: src/panels/EdgeTreatmentPanel.tsx
-msgid "Click a rectangular solid face to select its perimeter."
-msgstr ""
+#~ msgid "Click a rectangular solid face to select its perimeter."
+#~ msgstr ""
 
 #: src/tools/EdgeTreatmentTool.ts
 msgid "Click a rectangular solid face."
@@ -1571,12 +1583,20 @@ msgstr ""
 msgid "Click a start point for the angle. Shift or → / ← / ↑ lock the rotation axis. Tap {COPY_MODIFIER_LABEL} to rotate instead."
 msgstr ""
 
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Click a supported planar cap face to select its perimeter."
+msgstr ""
+
 #: src/tools/PositionTextureTool.ts
 msgid "Click a textured face to position its texture."
 msgstr ""
 
 #: src/panels/EdgeTreatmentPanel.tsx
-msgid "Click an edge to replace the selection. Ctrl/Command-click adds or removes edges on the same rectangular solid."
+#~ msgid "Click an edge to replace the selection. Ctrl/Command-click adds or removes edges on the same rectangular solid."
+#~ msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Click an edge to replace the selection. Ctrl/Command-click adds or removes edges on the same solid."
 msgstr ""
 
 #: src/tools/MoveTool.ts
@@ -1949,6 +1969,10 @@ msgstr ""
 
 #: src/palette/registry.ts
 msgid "concentric"
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Conservative slider bound: {boundLabel}. Exact input remains independent; every preview is validated."
 msgstr ""
 
 #: src/i18n/nativeMenu.ts
@@ -4991,8 +5015,8 @@ msgid "MULTI"
 msgstr ""
 
 #: src/tools/EdgeTreatmentTool.ts
-msgid "Multiple edges require an unmodified rectangular solid. Polygonal and nonconvex solids are not supported."
-msgstr ""
+#~ msgid "Multiple edges require an unmodified rectangular solid. Polygonal and nonconvex solids are not supported."
+#~ msgstr ""
 
 #: src/palette/registry.ts
 msgid "n-gon"
@@ -5919,6 +5943,10 @@ msgstr ""
 
 #: src/print/printJob.ts
 msgid "Parallel view"
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Parameters changed. Press Preview to evaluate this expensive operation."
 msgstr ""
 
 #. Cut list table column: the part name
@@ -7259,6 +7287,10 @@ msgstr ""
 msgid "Select {segLabel}"
 msgstr ""
 
+#: src/tools/EdgeTreatmentTool.ts
+msgid "Select a complete supported convex cap perimeter, or edges on an unmodified rectangular solid. Nonconvex solids are not supported."
+msgstr ""
+
 #: src/panels/MaterialPalette.tsx
 msgid "Select a material swatch to adjust its opacity"
 msgstr ""
@@ -7294,7 +7326,11 @@ msgid "Select at least one object to turn into a component."
 msgstr ""
 
 #: src/tools/EdgeTreatmentTool.ts
-msgid "Select distinct edges on one rectangular solid."
+#~ msgid "Select distinct edges on one rectangular solid."
+#~ msgstr ""
+
+#: src/tools/EdgeTreatmentTool.ts
+msgid "Select distinct edges on one solid."
 msgstr ""
 
 #: src/panels/ObjectInfoPanel.tsx

@@ -59,6 +59,16 @@ fn polygons_and_successive_opposite_bands_share_one_evaluator() {
                 .collect(),
         );
     }
+    for n in [6, 8] {
+        shapes.push(
+            (0..n)
+                .map(|i| {
+                    let t = std::f64::consts::TAU * i as f64 / n as f64;
+                    (0.05 * t.cos(), 0.05 * t.sin())
+                })
+                .collect(),
+        );
+    }
     shapes.push(vec![
         (0., 0.),
         (0.08, 0.),

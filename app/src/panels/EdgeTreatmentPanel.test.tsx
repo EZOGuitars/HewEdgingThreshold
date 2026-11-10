@@ -108,3 +108,15 @@ it('offers operation-specific help on hover, focus and click without applying ch
   expect(t.apply).not.toHaveBeenCalled()
   expect(t.configure).not.toHaveBeenCalled()
 })
+
+it('uses only the native conservative bound and keeps exact input separate from slider steps', () => {
+  const t = { ...tool(), setDimensionMeters: vi.fn() }
+  render(<EdgeTreatmentPanel tool={t as unknown as EdgeTreatmentTool} state={{ ...state, dimensionMeters: 0.0003175, limits: { maximum: 0.0125, certainty: 'conservative', segments_at_maximum: 8 } }} />)
+  const slider = screen.getByRole('slider', { name: 'Adjust chamfer distance' })
+  expect(slider).toHaveAttribute('max', '0.0125')
+  expect(screen.getByText(/Conservative slider bound/)).toBeInTheDocument()
+  fireEvent.change(slider, { target: { value: '0.000325' } })
+  expect(t.setDimensionMeters).toHaveBeenCalledWith(0.000325)
+  fireEvent.change(screen.getByLabelText('Distance'), { target: { value: '0.0125"' } })
+  expect(t.configure).toHaveBeenCalledWith({ distance: '0.0125"' })
+})

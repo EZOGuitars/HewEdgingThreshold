@@ -8,11 +8,18 @@ import type { Ray } from '../viewport/math'
 import { clearPreview, markSessionGhost } from './transformPreview'
 import {
   formatLengthIn,
+  metersFromUnit,
   getLengthUnit,
   parseLengthToMeters,
   subscribe,
   type LengthFormat,
 } from '../settings/units'
+
+// Editable values use numeric precision rather than display rounding policy.
+function formatTreatmentInput(meters: number, unit: LengthFormat): string {
+  const value = String(meters / metersFromUnit(1, unit))
+  return ['m', 'cm', 'mm'].includes(unit) ? `${value} ${unit}` : `${value}"`
+}
 
 export type TreatmentMode = 'chamfer' | 'roundover'
 export interface TreatmentInfo {
@@ -37,6 +44,9 @@ export interface TreatmentState {
   error: string | null
   info: TreatmentInfo | null
   acknowledged: boolean
+  manualPreview?: boolean
+  dimensionMeters?: number
+  limits?: { maximum: number; certainty: 'conservative'; segments_at_maximum: number } | null
 }
 export function treatmentError(error: unknown): string {
   const code =
@@ -69,10 +79,12 @@ export function treatmentError(error: unknown): string {
       return t`The preview is no longer current. Select the edge again and regenerate it.`
     case 'InsufficientClearance':
       return t`The cut reaches another face. Reduce the distance or radius.`
+    case 'UnsupportedCurvedBoundary':
+      return t`Circular and mixed curved perimeters need a certified curved evaluator. The source remains unchanged.`
     case 'UnsupportedBox':
-      return t`Multiple edges require an unmodified rectangular solid. Polygonal and nonconvex solids are not supported.`
+      return t`Select a complete supported convex cap perimeter, or edges on an unmodified rectangular solid. Nonconvex solids are not supported.`
     case 'InvalidSelection':
-      return t`Select distinct edges on one rectangular solid.`
+      return t`Select distinct edges on one solid.`
     case 'UnknownFace':
       return t`This face is no longer available. Select the face again.`
     case 'UnsupportedSolid':
@@ -96,7 +108,8 @@ export class EdgeTreatmentTool implements Tool {
   private timer: ReturnType<typeof setTimeout> | null = null
   // Display formatting has a finite precision ceiling. Never reparse its
   // rounded text after a unit switch; only an actual field edit replaces this.
-  private canonical: Partial<Record<'distance' | 'radius' | 'chord', number>> = {}
+  private canonical: Partial<Record<'distance' | 'radius' | 'chord', number>> = { distance: 0.005, radius: 0.005, chord: 0.0001 }
+  private limitsKey: string | null = null
   private additive = false
   private active = false
   private unsubscribe: (() => void) | null = null
@@ -134,11 +147,11 @@ export class EdgeTreatmentTool implements Tool {
         const value = this.canonical[field] ?? parseLengthToMeters(this.state[field], old)
         if (value !== null) {
           this.canonical[field] = value
-          this.state[field] = formatLengthIn(value, unit, 'exact')
+          this.state[field] = formatTreatmentInput(value, unit)
         }
       }
       this.state.unit = unit
-      this.requestPreview()
+      this.emit() // Unit display changes do not change a physical request.
     })
     this.emit()
   }
@@ -243,11 +256,21 @@ export class EdgeTreatmentTool implements Tool {
     Object.assign(this.state, values)
     this.requestPreview()
   }
+  /** Slider writes physical meters directly; display precision never feeds back. */
+  setDimensionMeters(value: number): void {
+    if (!Number.isFinite(value) || value <= 0) return
+    const field = this.state.mode === 'chamfer' ? 'distance' : 'radius'
+    this.canonical[field] = value
+    this.state[field] = formatTreatmentInput(value, this.state.unit)
+    this.requestPreview()
+  }
   acknowledge(value: boolean): void {
     this.state.acknowledged = value
     this.emit()
   }
   private emit(): void {
+    const input = this.input()
+    this.state.dimensionMeters = input ? (this.state.mode === 'chamfer' ? input.distance : input.radius) : undefined
     if (this.active) this.changed({ ...this.state })
   }
   private clearTimer(): void {
@@ -282,6 +305,12 @@ export class EdgeTreatmentTool implements Tool {
     this.state.info = null
     this.state.acknowledged = false
     this.state.error = null
+    const target = this.state.target
+    const key = target ? JSON.stringify([String(target.object), target.edges ?? [String(target.edge)], this.state.mode, this.input()?.chord]) : null
+    if (this.limitsKey !== key) {
+      this.limitsKey = null
+      this.state.limits = null
+    }
     if (!this.input()) {
       this.release()
       this.state.phase = 'error'
@@ -296,11 +325,12 @@ export class EdgeTreatmentTool implements Tool {
     }
     this.state.phase = 'pending'
     this.emit()
-    this.timer = setTimeout(() => this.generate(), 180)
+    if (!this.state.manualPreview) this.timer = setTimeout(() => this.generate(), 180)
   }
   generate(): void {
     this.clearTimer()
     if (!this.active || !this.state.target || this.state.pickingFace) return
+    const started = performance.now()
     const input = this.input()
     if (!input) {
       this.requestPreview()
@@ -315,6 +345,14 @@ export class EdgeTreatmentTool implements Tool {
     clearPreview(this.meshGroup)
     this.emit()
     try {
+      if (this.limitsKey === null) {
+        this.limitsKey = JSON.stringify([String(object), edges.map(String), this.state.mode, input.chord])
+        try {
+          const limits = JSON.parse(this.scene.edge_treatment_limits_json(object, BigUint64Array.from(edges), this.state.mode === 'roundover', input.chord))
+          if (limits.certainty === 'conservative' && Number.isFinite(limits.maximum) && limits.maximum > 0)
+            this.state.limits = limits
+        } catch { this.state.limits = null } // Text entry still uses full native validation.
+      }
       const handle =
         this.state.mode === 'chamfer'
           ? edges.length === 1
@@ -384,6 +422,10 @@ export class EdgeTreatmentTool implements Tool {
           mesh.free()
         }
       }
+      // Coalescing cannot interrupt synchronous WASM. After a slow evaluation,
+      // require explicit Preview rather than repeat blocking work on every drag.
+      // A resumable/worker evaluator remains necessary for fully live heavy jobs.
+      if (performance.now() - started > 100) this.state.manualPreview = true
       this.state.info = info
       this.state.phase = 'ready'
       this.state.error = null
@@ -458,6 +500,8 @@ export class EdgeTreatmentTool implements Tool {
     this.release()
     clearPreview(this.edgeGroup)
     this.state.target = null
+    this.state.limits = null
+    this.limitsKey = null
     this.state.pickingFace = false
     this.state.info = null
     this.state.phase = 'select'

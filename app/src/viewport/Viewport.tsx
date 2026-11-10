@@ -4686,7 +4686,7 @@ export default function Viewport({
       // The document changed (a commit, undo/redo, a session opened or
       // closed): a mirrored gesture still in flight re-reads its sibling
       // frames on the next sync rather than drawing at stale poses.
-      if (toolController.activeTool instanceof EdgeTreatmentTool) toolController.activeTool.documentChanged()
+      toolController.activeTool?.documentChanged?.()
       siblingPreview.invalidate()
       const wtMap = touched !== undefined
         ? sceneRenderer.refreshTouched(touched)
@@ -9907,9 +9907,7 @@ export default function Viewport({
       // MoveTool.onKey/onCtrlKeyUp (see `toggleCopyMode`) — no live
       // Alt/Ctrl-modifier tracking here.)
 
-      if (activeTool instanceof EdgeTreatmentTool) {
-        activeTool.setSelectionModifier(ev.metaKey || ev.ctrlKey)
-      }
+      toolController.activeTool?.setSelectionModifier?.(ev.metaKey || ev.ctrlKey)
       const constraint = 'snapConstraint' in activeTool
         ? (activeTool as { snapConstraint(ray?: Ray): SnapConstraint | null }).snapConstraint(ray)
         : null

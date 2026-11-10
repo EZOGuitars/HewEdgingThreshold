@@ -358,7 +358,9 @@ describe.skipIf(!existsSync(path))('metric dimensions across UI and actual WASM'
         setLengthUnit('dec_in')
         setLengthUnit('mm')
       }
-      expect(parseLengthToMeters(f.state().radius, 'mm')).not.toBe(exact)
+      // The precision input now preserves the editable decimal too; canonical
+      // meters remain authoritative independently of global display rounding.
+      expect(parseLengthToMeters(f.state().radius, 'mm')).toBe(exact)
       f.tool.generate()
       expect((f.state().info!.operation as { radius: number }).radius).toBe(exact)
       f.tool.apply()

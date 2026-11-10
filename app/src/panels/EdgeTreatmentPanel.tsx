@@ -3,7 +3,7 @@ import infoSvg from '@material-symbols/svg-400/outlined/info.svg?raw'
 import { InlineIcon } from './InlineIcon'
 import { t } from '@lingui/core/macro'
 import type { EdgeTreatmentTool, TreatmentState } from '../tools/EdgeTreatmentTool'
-import { getLengthUnitSuffix } from '../settings/units'
+import { formatLengthIn, getLengthUnitSuffix } from '../settings/units'
 
 const control: CSSProperties = {
   font: 'inherit',
@@ -101,6 +101,8 @@ export function EdgeTreatmentPanel({
   const fieldId = useId()
   const unit = getLengthUnitSuffix(state.unit)
   const selectedCount = state.target ? (state.target.edges?.length ?? 1) : 0
+  const sliderValue = state.limits ? Math.max(state.limits.maximum / 1000, Math.min(state.dimensionMeters ?? 0, state.limits.maximum)) : 0
+  const boundLabel = state.limits ? formatLengthIn(state.limits.maximum, state.unit, 'exact') : ''
   const segments = state.info?.segments
   const warnings = state.info?.warnings ?? []
   return (
@@ -128,7 +130,7 @@ export function EdgeTreatmentPanel({
       }}
     >
       <h3 style={{ marginTop: 0 }}>{t`Edge Treatment`}</h3>
-      <p>{t`Click an edge to replace the selection. Ctrl/Command-click adds or removes edges on the same rectangular solid.`}</p>
+      <p>{t`Click an edge to replace the selection. Ctrl/Command-click adds or removes edges on the same solid.`}</p>
       {state.mode === 'roundover' && <p>{t`Two-edge junctions have a visible miter seam. Three-edge junctions use faceted spherical corners.`}</p>}
       <div style={{ display: 'flex', gap: 8 }}>
         <button style={control} type="button" onClick={() => tool.selectFacePerimeter()}>{t`Select face perimeter`}</button>
@@ -206,11 +208,22 @@ export function EdgeTreatmentPanel({
             </div>
           </>
         )}
+        {state.limits && <div style={field}>
+          <label htmlFor={`${fieldId}-size-slider`}>{state.mode === 'chamfer' ? t`Adjust chamfer distance` : t`Adjust roundover radius`}</label>
+          <input id={`${fieldId}-size-slider`} type="range" min={state.limits.maximum / 1000}
+            max={state.limits.maximum} step={state.limits.maximum / 1000}
+            value={sliderValue}
+            aria-valuetext={formatLengthIn(sliderValue, state.unit, 'exact')}
+            aria-describedby={`${fieldId}-range-help`}
+            onChange={(event) => tool.setDimensionMeters(Number(event.target.value))}
+            onKeyDown={(event) => event.stopPropagation()} />
+          <small id={`${fieldId}-range-help`}>{t`Conservative slider bound: ${boundLabel}. Exact input remains independent; every preview is validated.`}</small>
+        </div>}
         <p role="status">
           {state.phase === 'select'
-            ? state.pickingFace ? t`Click a rectangular solid face to select its perimeter.` : t`Select an edge to preview.`
+            ? state.pickingFace ? t`Click a supported planar cap face to select its perimeter.` : t`Select an edge to preview.`
             : state.phase === 'pending'
-              ? t`Preparing preview…`
+              ? state.manualPreview ? t`Parameters changed. Press Preview to evaluate this expensive operation.` : t`Preparing preview…`
               : state.phase === 'ready'
                 ? t`Candidate shown in cyan. The original remains unchanged until Apply.`
                 : ''}
