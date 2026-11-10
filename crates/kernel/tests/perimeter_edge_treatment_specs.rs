@@ -148,7 +148,7 @@ fn actual_curve_ancestry_is_not_silently_reclassified_as_a_polygon() {
     let before = format!("{source:?}");
     assert!(matches!(
         edge_treatment::roundover_edges(&source, &perimeter(&source, true), 0.003, 0.00002),
-        Err(EdgeTreatmentError::UnsupportedCurvedBoundary)
+        Err(EdgeTreatmentError::SourceResolution)
     ));
     assert_eq!(format!("{source:?}"), before);
 }

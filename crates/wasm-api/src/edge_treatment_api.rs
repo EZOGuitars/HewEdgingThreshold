@@ -49,6 +49,28 @@ pub(crate) struct TreatmentBatchCommand {
     endpoints: Vec<[[f64; 3]; 2]>,
     parameters: TreatmentParameters,
 }
+/// Preview transport is separate from persistent replay commands. The origin's
+/// epoch/generation travel opaquely through the isolated evaluator and are
+/// checked again by the main tool before publication and final application.
+#[derive(Serialize, Deserialize)]
+struct PreviewRequest {
+    version: u32,
+    epoch: u64,
+    generation: u64,
+    command: TreatmentBatchCommand,
+}
+fn preview_command(request: &str) -> Result<TreatmentBatchCommand, ApiError> {
+    let request: PreviewRequest = serde_json::from_str(request)
+        .map_err(|_| ApiError::new("InvalidPreviewRequest", "invalid preview request"))?;
+    if request.version != 1 {
+        return Err(ApiError::new(
+            "InvalidPreviewRequest",
+            "unsupported preview version",
+        ));
+    }
+    Ok(request.command)
+}
+
 #[derive(PartialEq, Eq)]
 struct Context {
     epoch: u64,
@@ -328,6 +350,83 @@ impl Scene {
 
 #[wasm_bindgen]
 impl Scene {
+    /// Immutable geometric address for isolated preview evaluators. Scene-local
+    /// handles never cross the worker boundary: SID/hash/exact endpoints do.
+    pub fn edge_treatment_request_json(
+        &self,
+        object: u64,
+        edges: &[u64],
+        roundover: bool,
+        size: f64,
+        chord: f64,
+    ) -> Result<String, ApiError> {
+        let id = object_id(object);
+        self.treatment_target(id)?;
+        if edges.is_empty() {
+            return Err(ApiError::new("InvalidSelection", "empty edge selection"));
+        }
+        let source = self
+            .doc
+            .object(id)
+            .ok_or_else(|| stale("UnknownObject", "object"))?;
+        let endpoints = edges
+            .iter()
+            .map(|e| {
+                source
+                    .edge_endpoints(edge_id(*e))
+                    .map(|(a, b)| [coordinates(a), coordinates(b)])
+                    .ok_or_else(|| stale("UnknownEdge", "edge"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let command = TreatmentBatchCommand {
+            target_sid: self
+                .doc
+                .sid_of(&EntityRef::Object(id))
+                .ok_or_else(|| stale("UnknownObject", "SID"))?,
+            source_hash: self.doc.state_hash(),
+            endpoints,
+            parameters: if roundover {
+                TreatmentParameters::Roundover {
+                    radius: size,
+                    max_chord_error: chord,
+                }
+            } else {
+                TreatmentParameters::Chamfer { distance: size }
+            },
+        };
+        serde_json::to_string(&PreviewRequest {
+            version: 1,
+            epoch: self.doc_epoch,
+            generation: self.doc.history_generation(),
+            command,
+        })
+        .map_err(|_| ApiError::new("InvalidPreviewRequest", "nonfinite preview parameters"))
+    }
+    pub fn prepare_edge_treatment_request_json(&mut self, request: &str) -> Result<u32, ApiError> {
+        let command = preview_command(request)?;
+        let (id, edges) = self.recorded_treatment_edges(
+            command.target_sid,
+            command.source_hash,
+            &command.endpoints,
+        )?;
+        self.prepare_treatments(id.data().as_ffi(), &edges, command.parameters)
+    }
+    pub fn edge_treatment_request_limits_json(&self, request: &str) -> Result<String, ApiError> {
+        let command = preview_command(request)?;
+        let (id, edges) = self.recorded_treatment_edges(
+            command.target_sid,
+            command.source_hash,
+            &command.endpoints,
+        )?;
+        let (round, chord) = match command.parameters {
+            TreatmentParameters::Chamfer { .. } => (false, 0.),
+            TreatmentParameters::Roundover {
+                max_chord_error, ..
+            } => (true, max_chord_error),
+        };
+        self.edge_treatment_limits_json(id.data().as_ffi(), &edges, round, chord)
+    }
+
     /// Read-only geometric range probe. Does not mint/retire a handle, mutate
     /// history or recording, or replace the current prepared candidate.
     /// The endpoint is certified; smaller requests still undergo full validation.
@@ -572,6 +671,122 @@ mod tests {
             s.redo_depth(),
             s.history_generation(),
         )
+    }
+
+    #[test]
+    fn preview_requests_detect_history_aba_and_reject_unknown_versions() {
+        let (mut s, o, e) = fixture();
+        let before = s.save();
+        let first = s
+            .edge_treatment_request_json(o, &[e], false, 0.25, 0.)
+            .unwrap();
+        s.scene_undo().unwrap();
+        s.scene_redo().unwrap();
+        assert!(before == s.save());
+        let second = s
+            .edge_treatment_request_json(o, &[e], false, 0.25, 0.)
+            .unwrap();
+        assert_ne!(first, second);
+        let mut invalid: serde_json::Value = serde_json::from_str(&first).unwrap();
+        invalid["version"] = serde_json::json!(99);
+        code(
+            s.prepare_edge_treatment_request_json(&invalid.to_string()),
+            "InvalidPreviewRequest",
+        );
+        let command = preview_command(&first).unwrap();
+        s.load(&before).unwrap();
+        let (object, edges) = s
+            .recorded_treatment_edges(command.target_sid, command.source_hash, &command.endpoints)
+            .unwrap();
+        let third = s
+            .edge_treatment_request_json(object.data().as_ffi(), &edges, false, 0.25, 0.)
+            .unwrap();
+        assert_ne!(first, third);
+        s.prepare_edge_treatment_request_json(&first).unwrap(); // origin epoch is opaque to an isolated Scene
+    }
+
+    #[test]
+    fn circular_source_certification_sequential_history_and_isolated_requests() {
+        for first_round in [false, true] {
+            let mut s = Scene::new();
+            s.start_recording();
+            let sketch = s.begin_ground_sketch();
+            s.sketch_begin_gesture(sketch).unwrap();
+            s.sketch_begin_curve_with(sketch, 0., 0., 0., 0.05).unwrap();
+            for i in 0..64 {
+                let a = std::f64::consts::TAU * i as f64 / 64.;
+                let b = std::f64::consts::TAU * (i + 1) as f64 / 64.;
+                s.sketch_add_segment(
+                    sketch,
+                    0.05 * a.cos(),
+                    0.05 * a.sin(),
+                    0.,
+                    0.05 * b.cos(),
+                    0.05 * b.sin(),
+                    0.,
+                )
+                .unwrap();
+            }
+            s.sketch_end_curve(sketch).unwrap();
+            s.sketch_end_gesture(sketch).unwrap();
+            let r = s.sketch_regions(sketch).unwrap()[0];
+            let object = s.extrude_region(sketch, r, 0.04).unwrap();
+            let select = |s: &Scene, upper: bool| {
+                let o = s.doc.object(object_id(object)).unwrap();
+                let cap = o
+                    .faces()
+                    .iter()
+                    .find(|(_, f)| {
+                        if upper {
+                            f.plane.normal().z > 0.999
+                        } else {
+                            f.plane.normal().z < -0.999
+                        }
+                    })
+                    .unwrap()
+                    .0;
+                kernel::edge_treatment::face_perimeter_edges(o, cap)
+                    .unwrap()
+                    .into_iter()
+                    .map(|e| e.data().as_ffi())
+                    .collect::<Vec<_>>()
+            };
+            let original = s.save();
+            for (upper, round, size) in [(true, first_round, 0.003), (false, true, 0.002)] {
+                let edges = select(&s, upper);
+                let before = s.save();
+                let depth = s.undo_depth();
+                let request = s
+                    .edge_treatment_request_json(object, &edges, round, size, 0.0003)
+                    .unwrap();
+                recording::without_capture(|| {
+                    let mut isolated = Scene::new();
+                    isolated.load(&before).unwrap();
+                    let h = isolated
+                        .prepare_edge_treatment_request_json(&request)
+                        .unwrap();
+                    isolated.edge_treatment_mesh(h).unwrap();
+                });
+                assert_eq!(s.save(), before);
+                assert_eq!(s.undo_depth(), depth);
+                let h = s.prepare_edge_treatment_request_json(&request).unwrap();
+                s.commit_edge_treatment(h).unwrap();
+                let after = s.save();
+                s.scene_undo().unwrap();
+                assert_eq!(s.save(), before);
+                s.scene_redo().unwrap();
+                assert_eq!(s.save(), after);
+            }
+            assert_ne!(s.save(), original);
+            s.stop_recording();
+            let rec = s.take_recording();
+            let mut replay = Scene::new();
+            replay.replay(&rec).unwrap();
+            assert!(
+                s.save() == replay.save(),
+                "circular replay must preserve canonical geometry"
+            );
+        }
     }
 
     #[test]

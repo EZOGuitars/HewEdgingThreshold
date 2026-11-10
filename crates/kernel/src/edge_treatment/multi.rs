@@ -14,6 +14,12 @@ pub enum TreatmentSurface {
         axis: Vec3,
         radius: f64,
     },
+    Torus {
+        axis_point: Point3,
+        axis: Vec3,
+        major_radius: f64,
+        minor_radius: f64,
+    },
     Sphere {
         center: Point3,
         radius: f64,
@@ -33,6 +39,7 @@ struct BoundaryFace {
     back: crate::FaceMaterial,
     uv: Option<crate::UvFrame>,
     surface: Option<TreatmentSurface>,
+    source_surface: Option<crate::SurfaceRef>,
 }
 pub(super) struct Constraint {
     pub(super) plane: Plane,
@@ -180,7 +187,11 @@ pub fn chamfer_edges(
         });
     }
     if super::perimeter::is_complete_cap(source, edges) {
-        return super::perimeter::evaluate(source, edges, distance, None);
+        return if super::circular::recognizes(source, edges) {
+            super::circular::evaluate(source, edges, distance, None)
+        } else {
+            super::perimeter::evaluate(source, edges, distance, None)
+        };
     }
     batch(source, edges, distance, None)
 }
@@ -199,7 +210,11 @@ pub fn roundover_edges(
         });
     }
     if super::perimeter::is_complete_cap(source, edges) {
-        return super::perimeter::evaluate(source, edges, radius, Some(error));
+        return if super::circular::recognizes(source, edges) {
+            super::circular::evaluate(source, edges, radius, Some(error))
+        } else {
+            super::perimeter::evaluate(source, edges, radius, Some(error))
+        };
     }
     batch(source, edges, radius, Some(error))
 }
@@ -461,6 +476,7 @@ pub(super) fn intersect_boundary(
                 back: f.back_material,
                 uv: f.uv_frame,
                 surface: None,
+                source_surface: f.surface,
             }
         })
         .collect();
@@ -555,6 +571,7 @@ pub(super) fn intersect_boundary(
             back: None,
             uv: None,
             surface: constraint.surface,
+            source_surface: None,
         });
         faces = next;
     }
@@ -577,7 +594,7 @@ pub(super) fn intersect_boundary(
         .collect();
     let materials: Vec<_> = faces.iter().map(|f| f.material).collect();
     let uvs: Vec<_> = faces.iter().map(|f| f.uv).collect();
-    let surfaces = vec![None; faces.len()];
+    let surfaces: Vec<_> = faces.iter().map(|f| f.source_surface).collect();
     let mut object = Object::from_polygons_with_materials_and_frames(
         &compact, &polygons, &materials, &uvs, &surfaces,
     )

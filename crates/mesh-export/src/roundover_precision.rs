@@ -133,6 +133,7 @@ pub fn certify_treatment_surfaces(
     let mut maximum = 0.0_f64;
     let mut scale = 0.0_f64;
     let mut count = 0;
+    let mut torus_work = 200_000usize;
     for (index, face) in faces.iter().enumerate() {
         let Some(surface) = references.get(face) else {
             continue;
@@ -149,6 +150,38 @@ pub fn certify_treatment_surfaces(
             *p = Point3::new(read(0), read(1), read(2));
             scale = scale.max(p.x.abs()).max(p.y.abs()).max(p.z.abs());
         }
+        if let TreatmentSurface::Torus {
+            axis_point,
+            axis,
+            major_radius,
+            minor_radius,
+        } = *surface
+        {
+            if !major_radius.is_finite()
+                || major_radius <= 0.0
+                || !minor_radius.is_finite()
+                || minor_radius <= 0.0
+                || (axis.length() - 1.0).abs() > tol::NORMAL_DIRECTION
+            {
+                return Err(fail());
+            }
+            maximum = maximum.max(
+                torus_triangle_bound(
+                    points,
+                    QuarterTorus {
+                        origin: axis_point,
+                        axis,
+                        major: major_radius,
+                        minor: minor_radius,
+                    },
+                    requested,
+                    0,
+                    &mut torus_work,
+                )
+                .ok_or_else(fail)?,
+            );
+            continue;
+        }
         let (center, radius, axis) = match *surface {
             TreatmentSurface::Cylinder {
                 axis_point,
@@ -156,6 +189,7 @@ pub fn certify_treatment_surfaces(
                 radius,
             } => (axis_point, radius, Some(axis)),
             TreatmentSurface::Sphere { center, radius } => (center, radius, None),
+            TreatmentSurface::Torus { .. } => unreachable!("handled above"),
         };
         if !radius.is_finite()
             || radius <= 0.0
@@ -252,4 +286,90 @@ fn nearest_triangle_origin(t: [Vec3; 3]) -> Option<Vec3> {
         return None;
     }
     Some(a + ab * (vb / denominator) + ac * (vc / denominator))
+}
+
+// Conservative interval certificate on every point of the actual STL triangle.
+// The finite outer quarter-torus reduces to a quarter-circle in (rho-major,z).
+// Reflecting negative coordinates into the supported quadrant gives the
+// full-circle radial bound plus at most twice each negative excursion.
+// Recursive subdivision tightens bounds only; it never samples to claim proof.
+#[derive(Clone, Copy)]
+struct QuarterTorus {
+    origin: Point3,
+    axis: Vec3,
+    major: f64,
+    minor: f64,
+}
+fn torus_triangle_bound(
+    points: [Point3; 3],
+    domain: QuarterTorus,
+    requested: f64,
+    depth: usize,
+    work: &mut usize,
+) -> Option<f64> {
+    *work = work.checked_sub(1)?;
+    let QuarterTorus {
+        origin,
+        axis,
+        major,
+        minor,
+    } = domain;
+    let vectors = points.map(|p| p - origin);
+    let heights = vectors.map(|v| v.dot(axis));
+    let radial = std::array::from_fn(|i| vectors[i] - axis * heights[i]);
+    let low = nearest_triangle_origin(radial)
+        .map(|v| v.length())
+        .unwrap_or_else(|| {
+            (0..3)
+                .map(|i| nearest_segment_origin(radial[i], radial[(i + 1) % 3]).length())
+                .fold(f64::INFINITY, f64::min)
+        });
+    let high = radial.iter().map(|p| p.length()).fold(0.0, f64::max);
+    let x = [low - major, high - major];
+    let y = [
+        heights.into_iter().fold(f64::INFINITY, f64::min),
+        heights.into_iter().fold(f64::NEG_INFINITY, f64::max),
+    ];
+    if !x.into_iter().chain(y).all(f64::is_finite) {
+        return None;
+    }
+    let nearest = |r: [f64; 2]| {
+        if r[0] > 0.0 {
+            r[0]
+        } else if r[1] < 0.0 {
+            -r[1]
+        } else {
+            0.0
+        }
+    };
+    let min = nearest(x).hypot(nearest(y));
+    let max = x
+        .into_iter()
+        .flat_map(|a| y.map(|b| a.hypot(b)))
+        .fold(0.0, f64::max);
+    let scale = major.max(minor).max(
+        points
+            .iter()
+            .flat_map(|p| [p.x.abs(), p.y.abs(), p.z.abs()])
+            .fold(0.0, f64::max),
+    );
+    let bound = (minor - min).max(max - minor).max(0.0)
+        + 2.0 * (-x[0]).max(0.0)
+        + 2.0 * (-y[0]).max(0.0)
+        + 128.0 * f64::EPSILON * scale;
+    if bound <= requested {
+        return Some(bound);
+    }
+    if depth >= 14 {
+        return None;
+    }
+    let [a, b, c] = points;
+    let ab = a + (b - a) * 0.5;
+    let bc = b + (c - b) * 0.5;
+    let ca = c + (a - c) * 0.5;
+    [[a, ab, ca], [ab, b, bc], [ca, bc, c], [ab, bc, ca]]
+        .into_iter()
+        .try_fold(0.0_f64, |max, t| {
+            Some(max.max(torus_triangle_bound(t, domain, requested, depth + 1, work)?))
+        })
 }

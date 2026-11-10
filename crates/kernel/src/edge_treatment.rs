@@ -15,6 +15,7 @@ use crate::{
     ProfileError, Transform, Vec3, WatertightState, tol,
 };
 
+mod circular;
 mod multi;
 mod perimeter;
 
@@ -54,7 +55,11 @@ pub fn treatment_dimension_bound(
         return Ok(limit * 0.25);
     }
     if perimeter::is_complete_cap(source, edges) {
-        return Ok(perimeter::geometric_limit(source, edges)? * 0.25);
+        return Ok(if circular::recognizes(source, edges) {
+            circular::geometric_limit(source, edges)?
+        } else {
+            perimeter::geometric_limit(source, edges)?
+        } * 0.25);
     }
     multi::box_dimension_bound(source)
 }
@@ -105,6 +110,7 @@ pub enum EdgeTreatmentError {
     UnsupportedBox,
     /// Analytic boundary requires a certified curved evaluator and source envelope.
     UnsupportedCurvedBoundary,
+    SourceResolution,
     UnknownFace,
     /// Distance must be finite and greater than POINT_MERGE.
     InvalidDistance,
@@ -151,6 +157,10 @@ impl std::fmt::Display for EdgeTreatmentError {
             Self::UnsupportedCurvedBoundary => write!(
                 f,
                 "curved cap boundaries need a certified evaluator within the source carrier envelope"
+            ),
+            Self::SourceResolution => write!(
+                f,
+                "source circle facets are too coarse for the requested chord error; use a finer source circle"
             ),
             Self::UnknownFace => write!(f, "face handle does not resolve"),
             Self::UnknownEdge => write!(f, "edge handle does not resolve"),
@@ -519,6 +529,12 @@ fn evaluate_cut(
 }
 
 fn validate_convex_solid(object: &Object) -> Result<(), EdgeTreatmentError> {
+    validate_convex_carrier(object, false)
+}
+fn validate_convex_carrier(
+    object: &Object,
+    allow_cylinder: bool,
+) -> Result<(), EdgeTreatmentError> {
     object
         .validate()
         .map_err(|_| EdgeTreatmentError::InvalidSource)?;
@@ -529,7 +545,7 @@ fn validate_convex_solid(object: &Object) -> Result<(), EdgeTreatmentError> {
         return Err(EdgeTreatmentError::UnsupportedSolid);
     }
     for face in object.faces().values() {
-        if face.surface.is_some() || !face.inner_loops.is_empty() {
+        if (!allow_cylinder && face.surface.is_some()) || !face.inner_loops.is_empty() {
             return Err(EdgeTreatmentError::UnsupportedSolid);
         }
         Profile::new(
