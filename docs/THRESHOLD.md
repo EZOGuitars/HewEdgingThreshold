@@ -65,6 +65,8 @@ env XDG_CONFIG_HOME="$ALPHA_STATE/config" \
     2>&1 | tee "$ALPHA_STATE/logs/console.log"
 ```
 
+For an extracted source archive without `.git`, skip the Git checkout commands and set `HEW_BETA_SHA` to the first 12 characters of the exact commit in the release receipt instead of running `git rev-parse`. Build from the extracted repository root.
+
 Stop after a failed command. The executable path assumes the established default shell Cargo target directory; custom target directories must use their actual Cargo-reported artifact. No-bundle avoids installing an RPM or replacing Hew. Never delete alpha XDG state to speed a build. Use model copies in the isolated `models` directory; explicit file-open/save paths remain the user's responsibility.
 
 ## Reproducing validation
