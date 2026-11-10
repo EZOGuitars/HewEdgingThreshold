@@ -34,9 +34,9 @@ struct BoundaryFace {
     uv: Option<crate::UvFrame>,
     surface: Option<TreatmentSurface>,
 }
-struct Constraint {
-    plane: Plane,
-    surface: Option<TreatmentSurface>,
+pub(super) struct Constraint {
+    pub(super) plane: Plane,
+    pub(super) surface: Option<TreatmentSurface>,
 }
 struct BoxFrame {
     origin: Point3,
@@ -135,6 +135,14 @@ impl BoxFrame {
         std::array::from_fn(|i| self.axes[i] * if mask & (1 << i) != 0 { 1.0 } else { -1.0 })
     }
 }
+pub(super) fn box_dimension_bound(source: &Object) -> Result<f64, EdgeTreatmentError> {
+    Ok(BoxFrame::resolve(source)?
+        .lengths
+        .into_iter()
+        .fold(f64::INFINITY, f64::min)
+        * 0.25)
+}
+
 /// Topological perimeter IDs, never reconstructed from rounded render positions.
 pub fn face_perimeter_edges(
     source: &Object,
@@ -171,6 +179,9 @@ pub fn chamfer_edges(
             surfaces: vec![],
         });
     }
+    if super::perimeter::is_complete_cap(source, edges) {
+        return super::perimeter::evaluate(source, edges, distance, None);
+    }
     batch(source, edges, distance, None)
 }
 pub fn roundover_edges(
@@ -186,6 +197,9 @@ pub fn roundover_edges(
             segments: r.segments,
             surfaces: vec![],
         });
+    }
+    if super::perimeter::is_complete_cap(source, edges) {
+        return super::perimeter::evaluate(source, edges, radius, Some(error));
     }
     batch(source, edges, radius, Some(error))
 }
@@ -416,7 +430,7 @@ fn batch(
     })
 }
 
-fn intersect_boundary(
+pub(super) fn intersect_boundary(
     source: &Object,
     planes: &[Constraint],
 ) -> Result<(Object, Vec<(FaceId, TreatmentSurface)>), EdgeTreatmentError> {

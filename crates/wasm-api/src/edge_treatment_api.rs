@@ -147,27 +147,12 @@ impl Scene {
         }
         Ok(())
     }
-    fn prepare_treatment(
-        &mut self,
-        object: u64,
-        edge: u64,
+    fn certify_treatment(
+        &self,
+        id: ObjectId,
+        candidate: &EdgeTreatmentCandidate,
         parameters: TreatmentParameters,
-    ) -> Result<u32, ApiError> {
-        self.prepare_treatments(object, &[edge], parameters)
-    }
-    fn prepare_treatments(
-        &mut self,
-        object: u64,
-        edges: &[u64],
-        parameters: TreatmentParameters,
-    ) -> Result<u32, ApiError> {
-        let id = object_id(object);
-        self.treatment_target(id)?;
-        let native_edges: Vec<_> = edges.iter().copied().map(edge_id).collect();
-        let candidate = self
-            .doc
-            .prepare_edge_treatments(id, &native_edges, parameters.into())
-            .map_err(boundary_error)?;
+    ) -> Result<(), ApiError> {
         if let TreatmentParameters::Roundover {
             radius,
             max_chord_error,
@@ -193,6 +178,31 @@ impl Scene {
                 .map_err(|e| ApiError::new("StlChordPrecision", &e.message()))?;
             }
         }
+        Ok(())
+    }
+
+    fn prepare_treatment(
+        &mut self,
+        object: u64,
+        edge: u64,
+        parameters: TreatmentParameters,
+    ) -> Result<u32, ApiError> {
+        self.prepare_treatments(object, &[edge], parameters)
+    }
+    fn prepare_treatments(
+        &mut self,
+        object: u64,
+        edges: &[u64],
+        parameters: TreatmentParameters,
+    ) -> Result<u32, ApiError> {
+        let id = object_id(object);
+        self.treatment_target(id)?;
+        let native_edges: Vec<_> = edges.iter().copied().map(edge_id).collect();
+        let candidate = self
+            .doc
+            .prepare_edge_treatments(id, &native_edges, parameters.into())
+            .map_err(boundary_error)?;
+        self.certify_treatment(id, &candidate, parameters)?;
         let endpoints: Vec<_> = candidate
             .edges()
             .iter()
@@ -318,6 +328,41 @@ impl Scene {
 
 #[wasm_bindgen]
 impl Scene {
+    /// Read-only geometric range probe. Does not mint/retire a handle, mutate
+    /// history or recording, or replace the current prepared candidate.
+    /// The endpoint is certified; smaller requests still undergo full validation.
+    pub fn edge_treatment_limits_json(
+        &self,
+        object: u64,
+        edges: &[u64],
+        roundover: bool,
+        chord: f64,
+    ) -> Result<String, ApiError> {
+        let id = object_id(object);
+        self.treatment_target(id)?;
+        let native: Vec<_> = edges.iter().copied().map(edge_id).collect();
+        let source = self
+            .doc
+            .object(id)
+            .ok_or_else(|| stale("UnknownObject", "object"))?;
+        let maximum = kernel::edge_treatment::treatment_dimension_bound(source, &native)
+            .map_err(|e| api_err(&e, &e))?;
+        let parameters = if roundover {
+            TreatmentParameters::Roundover {
+                radius: maximum,
+                max_chord_error: chord,
+            }
+        } else {
+            TreatmentParameters::Chamfer { distance: maximum }
+        };
+        let candidate = self
+            .doc
+            .prepare_edge_treatments(id, &native, parameters.into())
+            .map_err(boundary_error)?;
+        self.certify_treatment(id, &candidate, parameters)?;
+        Ok(serde_json::json!({ "maximum": maximum, "certainty": "conservative", "segments_at_maximum": candidate.segments() }).to_string())
+    }
+
     pub fn prepare_chamfer_edges(
         &mut self,
         object: u64,
@@ -527,6 +572,78 @@ mod tests {
             s.redo_depth(),
             s.history_generation(),
         )
+    }
+
+    #[test]
+    fn polygon_sequential_ranges_export_and_history_share_the_candidate_contract() {
+        for n in [3, 4, 6, 8, 11] {
+            let mut s = Scene::new();
+            s.start_recording();
+            let points: Vec<_> = (0..n)
+                .map(|i| {
+                    let t = std::f64::consts::TAU * i as f64 / n as f64;
+                    (0.05 * t.cos(), 0.04 * t.sin())
+                })
+                .collect();
+            let object = polygon(&mut s, &points);
+            let cap_edges = |s: &Scene, upper: bool| {
+                let source = s.doc.object(object_id(object)).unwrap();
+                let face = source
+                    .faces()
+                    .iter()
+                    .find(|(_, f)| {
+                        if upper {
+                            f.plane.normal().z > 0.999
+                        } else {
+                            f.plane.normal().z < -0.999
+                        }
+                    })
+                    .unwrap()
+                    .0;
+                kernel::edge_treatment::face_perimeter_edges(source, face)
+                    .unwrap()
+                    .iter()
+                    .map(|e| e.data().as_ffi())
+                    .collect::<Vec<_>>()
+            };
+            let original = s.save();
+            let upper = cap_edges(&s, true);
+            let h = s.prepare_chamfer_edges(object, &upper, 0.003).unwrap();
+            let before = state(&s);
+            let limits: serde_json::Value = serde_json::from_str(
+                &s.edge_treatment_limits_json(object, &upper, true, 0.00002)
+                    .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(limits["certainty"], "conservative");
+            assert!(limits["maximum"].as_f64().unwrap() > 0.003);
+            assert_eq!(state(&s), before);
+            s.edge_treatment_mesh(h).unwrap(); // read-only query preserves the slot
+            s.commit_edge_treatment(h).unwrap();
+            let first = s.save();
+            let lower = cap_edges(&s, false);
+            let h = s
+                .prepare_roundover_edges(object, &lower, 0.0003175, 0.00009906)
+                .unwrap();
+            s.edge_treatment_mesh(h).unwrap();
+            s.commit_edge_treatment(h).unwrap();
+            let final_state = s.save();
+            s.scene_undo().unwrap();
+            assert_eq!(s.save(), first);
+            s.scene_undo().unwrap();
+            assert_eq!(s.save(), original);
+            s.scene_redo().unwrap();
+            s.scene_redo().unwrap();
+            assert_eq!(s.save(), final_state);
+            let mut loaded = Scene::new();
+            loaded.load(&final_state).unwrap();
+            assert_eq!(loaded.save(), final_state);
+            s.stop_recording();
+            let recording = s.take_recording();
+            let mut replay = Scene::new();
+            replay.replay(&recording).unwrap();
+            assert_eq!(replay.save(), final_state);
+        }
     }
 
     #[test]

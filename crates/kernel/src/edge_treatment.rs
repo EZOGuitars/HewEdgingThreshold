@@ -16,6 +16,48 @@ use crate::{
 };
 
 mod multi;
+mod perimeter;
+
+/// Conservative geometric bound. Final geometry and export still require
+/// validation; this is not an exact maximum or a precision guarantee.
+pub fn treatment_dimension_bound(
+    source: &Object,
+    edges: &[EdgeId],
+) -> Result<f64, EdgeTreatmentError> {
+    if edges.len() == 1 {
+        if !source.edges().contains_key(edges[0]) {
+            return Err(EdgeTreatmentError::UnknownEdge);
+        }
+        validate_convex_solid(source)?;
+        let frame = resolve_edge_frame(source, edges[0])?;
+        let mut limit = f64::INFINITY;
+        for (id, face) in source.faces() {
+            if frame.faces.contains(&id) || frame.caps.contains(&id) {
+                continue;
+            }
+            for p in [frame.start, frame.start + frame.direction * frame.length] {
+                let slack = -face.plane.signed_distance(p);
+                if slack <= tol::PLANE_DIST {
+                    return Err(EdgeTreatmentError::InsufficientClearance);
+                }
+                for inward in frame.inward {
+                    let slope = face.plane.normal().dot(inward);
+                    if slope > tol::NORMAL_DIRECTION {
+                        limit = limit.min(slack / slope);
+                    }
+                }
+            }
+        }
+        if !limit.is_finite() || limit <= 4.0 * tol::POINT_MERGE {
+            return Err(EdgeTreatmentError::InsufficientClearance);
+        }
+        return Ok(limit * 0.25);
+    }
+    if perimeter::is_complete_cap(source, edges) {
+        return Ok(perimeter::geometric_limit(source, edges)? * 0.25);
+    }
+    multi::box_dimension_bound(source)
+}
 pub use multi::{
     MAX_BATCH_PLANES, MultiEdgeTreatmentResult, TreatmentSurface, chamfer_edges,
     face_perimeter_edges, roundover_edges,
@@ -61,6 +103,8 @@ pub enum EdgeTreatmentError {
     InvalidSelection,
     /// Multi-edge treatment currently requires an oriented rectangular prism.
     UnsupportedBox,
+    /// Analytic boundary requires a certified curved evaluator and source envelope.
+    UnsupportedCurvedBoundary,
     UnknownFace,
     /// Distance must be finite and greater than POINT_MERGE.
     InvalidDistance,
@@ -103,6 +147,10 @@ impl std::fmt::Display for EdgeTreatmentError {
             Self::UnsupportedBox => write!(
                 f,
                 "multi-edge treatment requires an unmodified rectangular prism"
+            ),
+            Self::UnsupportedCurvedBoundary => write!(
+                f,
+                "curved cap boundaries need a certified evaluator within the source carrier envelope"
             ),
             Self::UnknownFace => write!(f, "face handle does not resolve"),
             Self::UnknownEdge => write!(f, "edge handle does not resolve"),
