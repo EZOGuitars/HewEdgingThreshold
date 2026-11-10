@@ -172,3 +172,21 @@ serialization or recording-format version was changed.
 
 See [stabilization evidence](EDGE_TREATMENT_STABILIZATION.md) for bounds,
 reproduction, regression results, and remaining limitations.
+
+## Connected box batches
+
+Additive Scene methods (lengths remain meters):
+
+```rust
+prepare_chamfer_edges(&mut self, object: u64, edges: &[u64], distance: f64) -> Result<u32, ApiError>
+prepare_roundover_edges(&mut self, object: u64, edges: &[u64], radius: f64, max_chord_error: f64) -> Result<u32, ApiError>
+edge_treatment_face_edges(&self, object: u64, face: u64) -> Result<Vec<u64>, ApiError>
+```
+
+JavaScript arrays at this boundary are BigUint64Array. Batches use the same
+candidate lifecycle, warnings, ownership and commit method as scalar calls.
+Info adds `edges` (canonical string IDs), `segments` (quarter-arc count; zero
+for chamfers), and `junctions`. The additive `edge_treatment_batch` recording
+resolves every original endpoint pair before preparing one candidate. Native
+model serialization is unchanged; old players cannot replay the new command.
+See [connected alpha scope and verification](EDGE_TREATMENT_PHASE2_ALPHA.md).

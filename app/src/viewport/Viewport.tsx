@@ -9907,6 +9907,9 @@ export default function Viewport({
       // MoveTool.onKey/onCtrlKeyUp (see `toggleCopyMode`) — no live
       // Alt/Ctrl-modifier tracking here.)
 
+      if (activeTool instanceof EdgeTreatmentTool) {
+        activeTool.setSelectionModifier(ev.metaKey || ev.ctrlKey)
+      }
       const constraint = 'snapConstraint' in activeTool
         ? (activeTool as { snapConstraint(ray?: Ray): SnapConstraint | null }).snapConstraint(ray)
         : null

@@ -90,3 +90,23 @@ Undo or reopen it rather than applying the same operation again.
 Do not treat a passed Chromium test as a passed WebKitGTK test. Curved guitar-body
 perimeters, concave fillets, connected-edge propagation, attached-sketch remapping,
 and cross-version topology replay remain outside this alpha's scope.
+
+## Connected-edge milestone
+
+Start each case from a fresh rectangular extrusion or Undo to its original box.
+Use a 100 × 60 × 20 mm box, 2 mm radius/distance and 0.05 mm chord error.
+
+| Action | Expected result | Actual / notes |
+|---|---|---|
+| Plain-click an edge, Ctrl/Command-click an adjacent edge. | Count 2; both orange; cyan candidate has the documented miter crease. | |
+| Toggle an edge off with Ctrl/Command-click. | Count and preview update; obsolete Apply is disabled immediately. | |
+| Select three edges meeting at one corner. | Faceted spherical junction, no gaps or extra solids. | |
+| Select face perimeter, then click a face interior. | Four original edges selected; complete candidate prepared together. | |
+| Select all twelve box edges. | Cylindrical bands and spherical corners; preview remains responsive. | |
+| Select two disconnected edges of the same box. | Both cuts in one candidate. | |
+| Ctrl/Command-click an edge on another solid. | Explicit same-solid refusal; no commit or changed model. | |
+| Clear, Cancel, Escape and switch tools during batch preview. | No geometry/history mutation or orphaned preview. | |
+| Apply a batch, Undo once, Redo once; save/reopen and export STL. | Whole operation restored atomically; valid closed mesh. | |
+| Reduce maximum chord error. | Actual reported segment count grows when required, or an explicit safety-limit refusal; no silent clamp. | |
+| Hover/focus/click all three information buttons and press Escape. | Readable operation-specific help; no accidental Apply. | |
+| Try the hexagonal boss and the original base edge after boss extrusion. | Safe refusal remains; general polygonal/nonconvex support is not part of this milestone. | |

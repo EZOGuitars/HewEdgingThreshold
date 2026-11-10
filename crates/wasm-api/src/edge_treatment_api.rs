@@ -42,6 +42,13 @@ pub(crate) struct TreatmentCommand {
     endpoints: [[f64; 3]; 2],
     parameters: TreatmentParameters,
 }
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub(crate) struct TreatmentBatchCommand {
+    target_sid: u64,
+    source_hash: u64,
+    endpoints: Vec<[[f64; 3]; 2]>,
+    parameters: TreatmentParameters,
+}
 #[derive(PartialEq, Eq)]
 struct Context {
     epoch: u64,
@@ -56,6 +63,7 @@ pub(crate) struct PreparedTreatment {
     candidate: EdgeTreatmentCandidate,
     context: Context,
     command: TreatmentCommand,
+    batch_endpoints: Option<Vec<[[f64; 3]; 2]>>,
 }
 
 fn boundary_error(e: DocumentEdgeTreatmentError) -> ApiError {
@@ -145,35 +153,58 @@ impl Scene {
         edge: u64,
         parameters: TreatmentParameters,
     ) -> Result<u32, ApiError> {
+        self.prepare_treatments(object, &[edge], parameters)
+    }
+    fn prepare_treatments(
+        &mut self,
+        object: u64,
+        edges: &[u64],
+        parameters: TreatmentParameters,
+    ) -> Result<u32, ApiError> {
         let id = object_id(object);
         self.treatment_target(id)?;
+        let native_edges: Vec<_> = edges.iter().copied().map(edge_id).collect();
         let candidate = self
             .doc
-            .prepare_edge_treatment(id, edge_id(edge), parameters.into())
+            .prepare_edge_treatments(id, &native_edges, parameters.into())
             .map_err(boundary_error)?;
         if let TreatmentParameters::Roundover {
             radius,
             max_chord_error,
         } = parameters
         {
-            mesh_export::certify_roundover_stl(
+            if candidate.edges().len() == 1 {
+                mesh_export::certify_roundover_stl(
+                    self.doc
+                        .object(id)
+                        .ok_or_else(|| stale("UnknownObject", "object"))?,
+                    candidate.edge(),
+                    &candidate.result().object,
+                    radius,
+                    max_chord_error,
+                )
+                .map_err(|e| ApiError::new("StlChordPrecision", &e.message()))?;
+            } else {
+                mesh_export::certify_treatment_surfaces(
+                    &candidate.result().object,
+                    candidate.surfaces(),
+                    max_chord_error,
+                )
+                .map_err(|e| ApiError::new("StlChordPrecision", &e.message()))?;
+            }
+        }
+        let endpoints: Vec<_> = candidate
+            .edges()
+            .iter()
+            .map(|&edge| {
                 self.doc
                     .object(id)
-                    .ok_or_else(|| stale("UnknownObject", "object"))?,
-                edge_id(edge),
-                &candidate.result().object,
-                radius,
-                max_chord_error,
-            )
-            .map_err(|e| ApiError::new("StlChordPrecision", &e.message()))?;
-        }
-        // Geometry resolved the edge before this read. Still return a typed
-        // refusal if that invariant ever changes, never unwrap a JS handle.
-        let (a, b) = self
-            .doc
-            .object(id)
-            .and_then(|o| o.edge_endpoints(edge_id(edge)))
-            .ok_or_else(|| stale("UnknownEdge", "edge"))?;
+                    .and_then(|o| o.edge_endpoints(edge))
+                    .map(|(a, b)| [coordinates(a), coordinates(b)])
+                    .ok_or_else(|| stale("UnknownEdge", "edge"))
+            })
+            .collect::<Result<_, _>>()?;
+        let [a, b] = endpoints[0];
         let target_sid = self
             .doc
             .sid_of(&EntityRef::Object(id))
@@ -189,7 +220,7 @@ impl Scene {
         let command = TreatmentCommand {
             target_sid,
             source_hash: self.doc.state_hash(),
-            endpoints: [coordinates(a), coordinates(b)],
+            endpoints: [a, b],
             parameters,
         };
         self.edge_candidate = Some(PreparedTreatment {
@@ -197,6 +228,11 @@ impl Scene {
             candidate,
             context: self.treatment_context(),
             command,
+            batch_endpoints: if endpoints.len() > 1 {
+                Some(endpoints)
+            } else {
+                None
+            },
         });
         Ok(handle)
     }
@@ -206,8 +242,13 @@ impl Scene {
             .filter(|p| p.handle == handle)
             .ok_or_else(|| stale("InvalidCandidateHandle", "candidate"))
     }
-    pub(crate) fn replay_treatment(&mut self, command: TreatmentCommand) -> Result<(), ApiError> {
-        if self.doc.state_hash() != command.source_hash {
+    fn recorded_treatment_edges(
+        &self,
+        target_sid: u64,
+        source_hash: u64,
+        endpoints: &[[[f64; 3]; 2]],
+    ) -> Result<(ObjectId, Vec<u64>), ApiError> {
+        if self.doc.state_hash() != source_hash {
             return Err(ApiError::new(
                 "ReplaySourceMismatch",
                 "edge treatment source state differs",
@@ -217,7 +258,7 @@ impl Scene {
             .doc
             .sids()
             .find_map(|(entity, sid)| match entity {
-                EntityRef::Object(id) if sid == command.target_sid => Some(*id),
+                EntityRef::Object(id) if sid == target_sid => Some(*id),
                 _ => None,
             })
             .ok_or_else(|| stale("UnknownObject", "recorded target SID"))?;
@@ -225,26 +266,51 @@ impl Scene {
             .doc
             .object(id)
             .ok_or_else(|| stale("UnknownObject", "recorded target"))?;
-        let mut matches = object.edges().keys().filter(|&e| {
-            object.edge_endpoints(e).is_some_and(|(a, b)| {
-                let ends = [coordinates(a), coordinates(b)];
-                ends == command.endpoints || [ends[1], ends[0]] == command.endpoints
-            })
-        });
-        let edge = matches.next().ok_or_else(|| {
-            ApiError::new(
-                "ReplayEdgeMismatch",
-                "recorded edge endpoints do not resolve",
-            )
-        })?;
-        if matches.next().is_some() {
-            return Err(ApiError::new(
-                "ReplayEdgeMismatch",
-                "recorded edge is ambiguous",
-            ));
+        let mut edges = Vec::new();
+        let mut seen = BTreeSet::new();
+        for pair in endpoints {
+            let mut matches = object.edges().keys().filter(|&e| {
+                object.edge_endpoints(e).is_some_and(|(a, b)| {
+                    let p = [coordinates(a), coordinates(b)];
+                    p == *pair || [p[1], p[0]] == *pair
+                })
+            });
+            let edge = matches.next().ok_or_else(|| {
+                ApiError::new(
+                    "ReplayEdgeMismatch",
+                    "recorded edge endpoints do not resolve",
+                )
+            })?;
+            if matches.next().is_some() || !seen.insert(edge) {
+                return Err(ApiError::new(
+                    "ReplayEdgeMismatch",
+                    "recorded edges are ambiguous or duplicated",
+                ));
+            }
+            edges.push(edge.data().as_ffi());
         }
-        let handle =
-            self.prepare_treatment(id.data().as_ffi(), edge.data().as_ffi(), command.parameters)?;
+        Ok((id, edges))
+    }
+    pub(crate) fn replay_treatment(&mut self, command: TreatmentCommand) -> Result<(), ApiError> {
+        let (id, edges) = self.recorded_treatment_edges(
+            command.target_sid,
+            command.source_hash,
+            &[command.endpoints],
+        )?;
+        let handle = self.prepare_treatment(id.data().as_ffi(), edges[0], command.parameters)?;
+        self.commit_edge_treatment(handle)?;
+        Ok(())
+    }
+    pub(crate) fn replay_treatment_batch(
+        &mut self,
+        command: TreatmentBatchCommand,
+    ) -> Result<(), ApiError> {
+        let (id, edges) = self.recorded_treatment_edges(
+            command.target_sid,
+            command.source_hash,
+            &command.endpoints,
+        )?;
+        let handle = self.prepare_treatments(id.data().as_ffi(), &edges, command.parameters)?;
         self.commit_edge_treatment(handle)?;
         Ok(())
     }
@@ -252,6 +318,42 @@ impl Scene {
 
 #[wasm_bindgen]
 impl Scene {
+    pub fn prepare_chamfer_edges(
+        &mut self,
+        object: u64,
+        edges: &[u64],
+        distance: f64,
+    ) -> Result<u32, ApiError> {
+        self.prepare_treatments(object, edges, TreatmentParameters::Chamfer { distance })
+    }
+    pub fn prepare_roundover_edges(
+        &mut self,
+        object: u64,
+        edges: &[u64],
+        radius: f64,
+        max_chord_error: f64,
+    ) -> Result<u32, ApiError> {
+        self.prepare_treatments(
+            object,
+            edges,
+            TreatmentParameters::Roundover {
+                radius,
+                max_chord_error,
+            },
+        )
+    }
+    pub fn edge_treatment_face_edges(&self, object: u64, face: u64) -> Result<Vec<u64>, ApiError> {
+        let id = object_id(object);
+        self.treatment_target(id)?;
+        kernel::edge_treatment::face_perimeter_edges(
+            self.doc
+                .object(id)
+                .ok_or_else(|| stale("UnknownObject", "object"))?,
+            FaceId::from(KeyData::from_ffi(face)),
+        )
+        .map(|edges| edges.iter().map(|e| e.data().as_ffi()).collect())
+        .map_err(|e| api_err(&e, &e))
+    }
     /// Prepares without editing the document. Success replaces/frees this
     /// Scene's previous candidate; failure retains it. Handles are opaque,
     /// process-unique u32 tokens, not geometry or document identifiers.
@@ -305,6 +407,13 @@ impl Scene {
         serde_json::to_string(&serde_json::json!({
             "handle":handle,"object":p.candidate.source().data().as_ffi().to_string(),
             "object_sid":p.command.target_sid.to_string(),"edge":p.candidate.edge().data().as_ffi().to_string(),
+            "edges":p.candidate.edges().iter().map(|e|e.data().as_ffi().to_string()).collect::<Vec<_>>(),
+            "segments":p.candidate.segments(),
+            "junctions":match p.candidate.operation() {
+                EdgeTreatmentOperation::Chamfer { .. } => "planar bevel junctions",
+                _ if p.candidate.edges().len()>1 => "two-edge miters; three-edge spherical patches",
+                _ => "single edge",
+            },
             "operation":p.command.parameters,"removed_volume":p.candidate.result().removed_volume,
             "expected_removed_volume":p.candidate.result().expected_removed_volume,"warnings":warnings,
         })).map_err(|e|ApiError::new("CandidateSerialization",&e.to_string()))
@@ -343,9 +452,20 @@ impl Scene {
             .commit_edge_treatment(prepared.candidate)
             .map_err(boundary_error)?;
         self.reconcile(&change);
-        recording::record(recording::RecordedCall::EdgeTreatment {
-            command: prepared.command,
-        });
+        if let Some(endpoints) = prepared.batch_endpoints {
+            recording::record(recording::RecordedCall::EdgeTreatmentBatch {
+                command: TreatmentBatchCommand {
+                    target_sid: prepared.command.target_sid,
+                    source_hash: prepared.command.source_hash,
+                    endpoints,
+                    parameters: prepared.command.parameters,
+                },
+            });
+        } else {
+            recording::record(recording::RecordedCall::EdgeTreatment {
+                command: prepared.command,
+            });
+        }
         Ok(DocChangeJs { inner: change })
     }
     /// Frees the matching slot only; invalid/foreign handles do not evict it.
@@ -851,5 +971,83 @@ mod tests {
                 .count(),
             1
         );
+    }
+    #[test]
+    fn batch_treatments_preview_commit_history_save_and_replay() {
+        for round in [false, true] {
+            let (mut s, o, _) = fixture();
+            let id = object_id(o);
+            let edges: Vec<_> = s
+                .doc
+                .object(id)
+                .unwrap()
+                .edges()
+                .keys()
+                .map(|e| e.data().as_ffi())
+                .collect();
+            let before = s.save();
+            let depth = s.doc.undo_depth();
+            s.start_recording();
+            let h = if round {
+                s.prepare_roundover_edges(o, &edges, 0.25, 0.005)
+            } else {
+                s.prepare_chamfer_edges(o, &edges, 0.25)
+            }
+            .unwrap();
+            let info: serde_json::Value =
+                serde_json::from_str(&s.edge_treatment_info_json(h).unwrap()).unwrap();
+            assert_eq!(info["edges"].as_array().unwrap().len(), 12);
+            assert_eq!(s.save(), before);
+            assert_eq!(s.doc.undo_depth(), depth);
+            let preview = s.edge_treatment_mesh(h).unwrap().positions();
+            s.commit_edge_treatment(h).unwrap();
+            assert_eq!(s.doc.undo_depth(), depth + 1);
+            assert_eq!(s.object_mesh(o).unwrap().positions(), preview);
+            let after = s.save();
+            s.scene_undo().unwrap();
+            assert_eq!(s.save(), before);
+            s.scene_redo().unwrap();
+            assert_eq!(s.save(), after);
+            let mut loaded = Scene::new();
+            loaded.load(&after).unwrap();
+            assert_eq!(loaded.save(), after);
+            s.stop_recording();
+            let recording = s.take_recording();
+            let mut replay = Scene::new();
+            replay.load(&before).unwrap();
+            replay.replay(&recording).unwrap();
+            assert_eq!(replay.save(), after);
+            assert!(recording.contains("edge_treatment_batch"));
+        }
+    }
+    #[test]
+    fn batch_invalid_stale_and_cancel_are_atomic() {
+        let (mut s, o, _) = fixture();
+        let id = object_id(o);
+        let edges: Vec<_> = s
+            .doc
+            .object(id)
+            .unwrap()
+            .edges()
+            .keys()
+            .map(|e| e.data().as_ffi())
+            .collect();
+        let before = s.save();
+        code(
+            s.prepare_roundover_edges(o, &[], 0.25, 0.005),
+            "InvalidSelection",
+        );
+        code(
+            s.prepare_chamfer_edges(o, &[edges[0], edges[0]], 0.25),
+            "InvalidSelection",
+        );
+        let h = s.prepare_roundover_edges(o, &edges, 0.25, 0.005).unwrap();
+        s.discard_edge_treatment(h).unwrap();
+        assert_eq!(s.save(), before);
+        let h = s.prepare_roundover_edges(o, &edges, 0.25, 0.005).unwrap();
+        s.scene_undo().unwrap();
+        let newer = s.save();
+        code(s.commit_edge_treatment(h), "StaleCandidate");
+        assert_eq!(s.save(), newer);
     }
 }

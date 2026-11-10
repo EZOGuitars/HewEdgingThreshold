@@ -782,6 +782,10 @@ msgstr ""
 msgid "A kernel error occurred — the session is no longer usable. Reload the page to recover."
 msgstr ""
 
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "A larger radius removes more material and produces a broader curve. A smaller radius creates a tighter roundover."
+msgstr ""
+
 #: src/tools/LineTool.ts
 msgid "A line needs a length. Type a length other than 0."
 msgstr ""
@@ -834,6 +838,10 @@ msgstr ""
 msgid "About {approxSize} to send, compressed."
 msgstr ""
 
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "About {label}"
+msgstr ""
+
 #: src/i18n/nativeMenu.ts
 msgid "About Hew"
 msgstr ""
@@ -884,6 +892,10 @@ msgstr ""
 
 #: src/panels/MaterialPalette.tsx
 msgid "Add color"
+msgstr ""
+
+#: src/tools/EdgeTreatmentTool.ts
+msgid "Add edges from the same solid, or click without Ctrl/Command to start a new selection."
 msgstr ""
 
 #: src/i18n/nativeMenu.ts
@@ -1008,6 +1020,10 @@ msgstr ""
 msgid "Annotation"
 msgstr ""
 
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Annotations {annotations} will lose their source attachments. Their recorded points remain. Undo restores the attachments."
+msgstr ""
+
 #: src/kernelErrors.ts
 msgid "Another drawing step is still in progress. Finish or cancel it first."
 msgstr ""
@@ -1036,6 +1052,10 @@ msgstr ""
 #: src/settings/FluentSettingsPage.tsx
 #: src/settings/ThemePane.tsx
 msgid "Appearance"
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Apply"
 msgstr ""
 
 #: src/palette/registry.ts
@@ -1267,6 +1287,7 @@ msgstr ""
 
 #: src/health/healthCopy.ts
 #: src/panels/ConfirmDialog.tsx
+#: src/panels/EdgeTreatmentPanel.tsx
 #: src/panels/ExportDialog.tsx
 #: src/panels/library/LibraryDetailPane.tsx
 #: src/panels/PrintDialog.tsx
@@ -1281,6 +1302,10 @@ msgstr ""
 #: src/shop/ReceiveConfirmSheet.tsx
 #: src/shop/ScanSheet.tsx
 msgid "Cancel"
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Candidate shown in cyan. The original remains unchanged until Apply."
 msgstr ""
 
 #: src/panels/ScenesPanel.tsx
@@ -1311,6 +1336,26 @@ msgstr ""
 #: src/settings/stlImportUnit.ts
 #: src/settings/units.ts
 msgid "Centimeters"
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Chamfer"
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Chamfer distance"
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Chamfer distance controls how far the bevel extends from the original sharp edge along each adjacent face."
+msgstr ""
+
+#: src/i18n/historyLabels.ts
+msgid "Chamfer edge"
+msgstr ""
+
+#: src/palette/registry.ts
+msgid "Chamfer or round over a supported straight convex edge with a validated preview."
 msgstr ""
 
 #: src/i18n/historyLabels.ts
@@ -1418,6 +1463,7 @@ msgid "cleanup"
 msgstr ""
 
 #: src/log/LogPanel.tsx
+#: src/panels/EdgeTreatmentPanel.tsx
 msgid "Clear"
 msgstr ""
 
@@ -1501,6 +1547,14 @@ msgstr ""
 msgid "Click a point to set the baseline direction."
 msgstr ""
 
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Click a rectangular solid face to select its perimeter."
+msgstr ""
+
+#: src/tools/EdgeTreatmentTool.ts
+msgid "Click a rectangular solid face."
+msgstr ""
+
 #: src/tools/EditVertexTool.ts
 msgid "Click a sketch point to pick it up."
 msgstr ""
@@ -1519,6 +1573,10 @@ msgstr ""
 
 #: src/tools/PositionTextureTool.ts
 msgid "Click a textured face to position its texture."
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Click an edge to replace the selection. Ctrl/Command-click adds or removes edges on the same rectangular solid."
 msgstr ""
 
 #: src/tools/MoveTool.ts
@@ -1559,6 +1617,10 @@ msgstr ""
 
 #: src/tools/FollowMeTool.ts
 msgid "Click the flat face to run the profile around it — or a drawn line or curve to follow."
+msgstr ""
+
+#: src/tools/EdgeTreatmentTool.ts
+msgid "Click the middle of a straight solid edge."
 msgstr ""
 
 #: src/tools/LineTool.ts
@@ -1855,6 +1917,10 @@ msgstr ""
 #: src/panels/treeModel.ts
 msgctxt "unnamed item"
 msgid "Component {n}"
+msgstr ""
+
+#: src/tools/EdgeTreatmentTool.ts
+msgid "Component definition edges are not supported. Select a plain solid outside component editing."
 msgstr ""
 
 #: src/viewport/Viewport.tsx
@@ -2596,6 +2662,7 @@ msgstr ""
 msgid "distance"
 msgstr ""
 
+#: src/panels/EdgeTreatmentPanel.tsx
 #: src/viewport/MeasurementBox.tsx
 msgid "Distance"
 msgstr ""
@@ -2830,6 +2897,12 @@ msgctxt "drawn shape"
 msgid "Edge shape"
 msgstr ""
 
+#: src/i18n/nativeMenu.ts
+#: src/panels/EdgeTreatmentPanel.tsx
+#: src/tools/toolRegistry.ts
+msgid "Edge Treatment"
+msgstr ""
+
 #: src/palette/registry.ts
 msgid "edges only"
 msgstr ""
@@ -2895,12 +2968,24 @@ msgstr ""
 msgid "engrave"
 msgstr ""
 
+#: src/tools/EdgeTreatmentTool.ts
+msgid "Enter a finite positive distance or radius. Very small cuts may be below modeling tolerance."
+msgstr ""
+
 #: src/print/usePrintController.ts
 msgid "Enter a length like “1 cm”, “1in” or “3/8″”."
 msgstr ""
 
+#: src/tools/EdgeTreatmentTool.ts
+msgid "Enter a positive chord error above modeling tolerance, or increase it to use fewer segments."
+msgstr ""
+
 #: src/health/healthCopy.ts
 msgid "Enter a thickness, such as 3 mm."
+msgstr ""
+
+#: src/tools/EdgeTreatmentTool.ts
+msgid "Enter finite positive lengths, with an optional unit suffix."
 msgstr ""
 
 #: src/print/usePrintController.ts
@@ -3164,6 +3249,10 @@ msgstr ""
 msgid "Finish editing group"
 msgstr ""
 
+#: src/tools/EdgeTreatmentTool.ts
+msgid "Finish group, component, or drawing editing, then select a plain solid edge."
+msgstr ""
+
 #: src/kernelErrors.ts
 msgid "Finishing this step needed the drawing it just closed and couldn't find it, so nothing was placed and the model was left unchanged. If this keeps happening, use Report Bug to capture the session."
 msgstr ""
@@ -3289,6 +3378,18 @@ msgstr ""
 
 #: src/panels/TextDialog.tsx
 msgid "Font family"
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "For a 90° corner, an equal-distance chamfer removes the corner and replaces it with a flat 45° beveled surface."
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "For a 90° corner, the radius also equals the distance from the original sharp edge to where the roundover meets each adjacent face."
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "For example, a 0.25-inch chamfer extends 0.25 inches along each adjoining face. The sloped bevel itself is approximately 0.354 inches wide."
 msgstr ""
 
 #: src/panels/SentReportsDialog.tsx
@@ -3872,6 +3973,10 @@ msgstr ""
 msgid "How many straight facets this circle is drawn with (minimum {MIN_CIRCLE_SEGMENTS}). Changing it rebuilds the circle."
 msgstr ""
 
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "I understand the annotation attachments will be removed."
+msgstr ""
+
 #: src/palette/registry.ts
 msgid "icons only"
 msgstr ""
@@ -4086,6 +4191,10 @@ msgstr ""
 msgid "It is solid."
 msgstr ""
 
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "It is the radius of the ideal circular arc used to replace the sharp edge, measured from the arc's center."
+msgstr ""
+
 #: src/tools/FollowMeTool.ts
 msgid "It will land at the top level, not inside the group you’re editing."
 msgstr ""
@@ -4182,6 +4291,10 @@ msgstr ""
 #: src/settings/LanguagePane.tsx
 #: src/settings/SettingsWindow.tsx
 msgid "Language"
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Larger values produce fewer segments and a more visibly faceted result."
 msgstr ""
 
 #: src/panels/PrintDialog.tsx
@@ -4571,6 +4684,14 @@ msgstr ""
 msgid "Maximize"
 msgstr ""
 
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Maximum chord error"
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Maximum chord error controls how closely the flat segments of a roundover approximate a perfect circular curve."
+msgstr ""
+
 #: src/palette/registry.ts
 msgid "measure"
 msgstr ""
@@ -4867,6 +4988,10 @@ msgstr ""
 #. Short uppercase chip on the contextual dock naming what is selected
 #: src/panels/dockLogic.ts
 msgid "MULTI"
+msgstr ""
+
+#: src/tools/EdgeTreatmentTool.ts
+msgid "Multiple edges require an unmodified rectangular solid. Polygonal and nonconvex solids are not supported."
 msgstr ""
 
 #: src/palette/registry.ts
@@ -5642,6 +5767,10 @@ msgstr ""
 #~ msgid "Opens in SketchUp Make 2017 and later."
 #~ msgstr ""
 
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Operation"
+msgstr ""
+
 #: src/shop/ScanSheet.tsx
 msgid "Or scan the QR with your camera app instead."
 msgstr ""
@@ -6024,6 +6153,10 @@ msgstr ""
 msgid "preferences"
 msgstr ""
 
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Preparing preview…"
+msgstr ""
+
 #: src/panels/PrintDialog.tsx
 #: src/shop/DocumentMenu.tsx
 msgid "Preparing…"
@@ -6031,6 +6164,10 @@ msgstr ""
 
 #: src/tools/TapeMeasureTool.ts
 msgid "Press Enter to resize the model to the typed distance — Esc to keep the measurement as it is."
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Preview"
 msgstr ""
 
 #: src/health/healthCopy.ts
@@ -6187,6 +6324,14 @@ msgstr ""
 
 #: src/palette/registry.ts
 msgid "radius"
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Radius"
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Radius determines the size of the rounded corner."
 msgstr ""
 
 #: src/panels/ReportBugDialog.tsx
@@ -6735,6 +6880,18 @@ msgstr ""
 msgid "Roughness for {selectedName}"
 msgstr ""
 
+#: src/i18n/historyLabels.ts
+msgid "Round over edge"
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Roundover"
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Roundover radius"
+msgstr ""
+
 #: src/viewport/Viewport.tsx
 msgid "Running without graphics acceleration — large models will be slow."
 msgstr ""
@@ -7084,6 +7241,10 @@ msgstr ""
 msgid "Segments"
 msgstr ""
 
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Segments per quarter arc: {segments}"
+msgstr ""
+
 #: src/i18n/nativeMenu.ts
 #: src/shop/ShopApp.tsx
 msgid "Select"
@@ -7102,6 +7263,10 @@ msgstr ""
 msgid "Select a material swatch to adjust its opacity"
 msgstr ""
 
+#: src/tools/EdgeTreatmentTool.ts
+msgid "Select a straight convex edge between perpendicular planar faces on a closed convex solid. Curved and concave edges are not supported."
+msgstr ""
+
 #: src/tools/PositionTextureTool.ts
 msgid "Select a textured face to position its texture"
 msgstr ""
@@ -7110,6 +7275,10 @@ msgstr ""
 #: src/palette/registry.ts
 #: src/panels/MenuBar.tsx
 msgid "Select All"
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Select an edge to preview."
 msgstr ""
 
 #: src/panels/library/LibraryDetailPane.tsx
@@ -7122,6 +7291,10 @@ msgstr ""
 
 #: src/kernelErrors.ts
 msgid "Select at least one object to turn into a component."
+msgstr ""
+
+#: src/tools/EdgeTreatmentTool.ts
+msgid "Select distinct edges on one rectangular solid."
 msgstr ""
 
 #: src/panels/ObjectInfoPanel.tsx
@@ -7140,6 +7313,10 @@ msgstr ""
 msgid "Select everything that is not selected, and deselect what is."
 msgstr ""
 
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Select face perimeter"
+msgstr ""
+
 #: src/App.tsx
 msgid "Select it and reveal it in the Outliner."
 msgstr ""
@@ -7152,6 +7329,10 @@ msgstr ""
 
 #: src/health/healthCopy.ts
 msgid "Select something in the model first."
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Selected edges: {selectedCount}"
 msgstr ""
 
 #: src/health/healthCopy.ts
@@ -7434,6 +7615,10 @@ msgstr ""
 msgid "Show tagged objects"
 msgstr ""
 
+#: src/tools/EdgeTreatmentTool.ts
+msgid "Show the target object before selecting its edge."
+msgstr ""
+
 #: src/settings/ViewPane.tsx
 msgid "Show tool hints"
 msgstr ""
@@ -7603,6 +7788,10 @@ msgstr ""
 msgid "Slower"
 msgstr ""
 
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Smaller values produce more segments and smoother geometry, but increase mesh complexity."
+msgstr ""
+
 #: src/settings/ViewPane.tsx
 msgid "Smooth camera moves"
 msgstr ""
@@ -7738,6 +7927,10 @@ msgstr ""
 
 #: src/log/reportImports.ts
 msgid "STL model (.stl)"
+msgstr ""
+
+#: src/tools/EdgeTreatmentTool.ts
+msgid "STL precision cannot preserve this chord tolerance here. Use a finer chord setting or move the model closer to the origin."
 msgstr ""
 
 #. Example tag path shown as placeholder text
@@ -8220,6 +8413,10 @@ msgstr ""
 msgid "The cut needs at least two points. Click a start and an end."
 msgstr ""
 
+#: src/tools/EdgeTreatmentTool.ts
+msgid "The cut reaches another face. Reduce the distance or radius."
+msgstr ""
+
 #: src/kernelErrors.ts
 msgid "The drawing tools got out of step. Press Escape and try again."
 msgstr ""
@@ -8341,6 +8538,10 @@ msgstr ""
 msgid "The picture would be {w} × {h} m, and each side must be at most {max} m. Drag it out smaller or type a smaller width."
 msgstr ""
 
+#: src/tools/EdgeTreatmentTool.ts
+msgid "The preview is no longer current. Select the edge again and regenerate it."
+msgstr ""
+
 #: src/tools/FollowMeTool.ts
 msgid "The profile only touches the solid at an edge or corner — left as a separate object."
 msgstr ""
@@ -8454,6 +8655,14 @@ msgstr ""
 msgid "The thickness must be more than zero."
 msgstr ""
 
+#: src/tools/EdgeTreatmentTool.ts
+msgid "The treatment could not be validated. Reduce its dimensions or select another supported straight convex edge."
+msgstr ""
+
+#: src/tools/EdgeTreatmentTool.ts
+msgid "The treatment was applied, but the view could not be refreshed. Use Undo or reopen the document before continuing."
+msgstr ""
+
 #: src/i18n/nativeMenu.ts
 msgid "The update could not be installed.\n"
 "\n"
@@ -8462,6 +8671,10 @@ msgstr ""
 
 #: src/i18n/nativeMenu.ts
 msgid "The update has been installed. Restart Hew now to use it?"
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "The value is the maximum permitted deviation between the ideal circular arc and its faceted approximation, expressed in the model's current units."
 msgstr ""
 
 #: src/kernelErrors.ts
@@ -8569,6 +8782,14 @@ msgstr ""
 msgid "This edge has a face on only one side — there's nothing to merge it with."
 msgstr ""
 
+#: src/tools/EdgeTreatmentTool.ts
+msgid "This edge is no longer available. Select the edge again."
+msgstr ""
+
+#: src/tools/EdgeTreatmentTool.ts
+msgid "This face is no longer available. Select the face again."
+msgstr ""
+
 #: src/panels/SentReportsDialog.tsx
 msgid "This file can’t be sent."
 msgstr ""
@@ -8661,6 +8882,14 @@ msgstr ""
 msgid "This nested component can't open for editing here — its placement is mirrored, unevenly scaled, or inside a group. Explode the instance, or make it unique, to edit its parts."
 msgstr ""
 
+#: src/tools/EdgeTreatmentTool.ts
+msgid "This object has an attached sketch. Edge treatment cannot safely preserve it yet."
+msgstr ""
+
+#: src/tools/EdgeTreatmentTool.ts
+msgid "This object is no longer available. Select another edge."
+msgstr ""
+
 #: src/health/healthBatch.ts
 msgid "This object is no longer in the model."
 msgstr ""
@@ -8739,6 +8968,10 @@ msgstr ""
 
 #: src/panels/ReportBugDialog.tsx
 msgid "This report is too large to send."
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "This setting applies to roundovers, not chamfers."
 msgstr ""
 
 #: src/kernelErrors.ts
@@ -8981,6 +9214,10 @@ msgstr ""
 
 #: src/kernelErrors.ts
 msgid "Two faces in this panel meet without sharing an edge, so a thickness would leave a crack inside. Draw a line where they meet, then try again."
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Two-edge junctions have a visible miter seam. Three-edge junctions use faceted spherical corners."
 msgstr ""
 
 #. Library list column header
@@ -9279,6 +9516,10 @@ msgstr ""
 
 #: src/viewport/MeasurementBox.tsx
 msgid "Value"
+msgstr ""
+
+#: src/panels/EdgeTreatmentPanel.tsx
+msgid "Values without a unit use {unit}. Explicit units are accepted."
 msgstr ""
 
 #: src/palette/registry.ts

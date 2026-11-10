@@ -10484,6 +10484,7 @@ impl Scene {
             for call in rec.calls {
                 match call {
                     EdgeTreatment { command } => self.replay_treatment(command)?,
+                    EdgeTreatmentBatch { command } => self.replay_treatment_batch(command)?,
                     BeginGroundSketch => {
                         self.begin_ground_sketch();
                     }

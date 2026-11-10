@@ -34,6 +34,7 @@ function mtime(path) {
 // Newest mtime among the kernel's build inputs.
 function newestSourceMtime() {
   let newest = Math.max(
+    mtime(fileURLToPath(import.meta.url)),
     mtime(join(repoRoot, "Cargo.toml")),
     mtime(join(repoRoot, "Cargo.lock")),
     mtime(join(repoRoot, "rust-toolchain.toml")),
@@ -62,7 +63,10 @@ function newestSourceMtime() {
 }
 
 const built = mtime(outFile);
-if (built !== 0 && built >= newestSourceMtime()) {
+const packageDir = dirname(outFile);
+const outputsPresent = ["wasm_api.js", "wasm_api.d.ts", "wasm_api_bg.wasm", "wasm_api_bg.wasm.d.ts", "package.json"]
+  .every(name => mtime(join(packageDir, name)) !== 0);
+if (outputsPresent && built >= newestSourceMtime()) {
   console.log("[build-wasm] kernel WASM is up to date — skipping build");
   process.exit(0);
 }

@@ -81,7 +81,7 @@
 //! "the same command produces the same file headless or live").
 
 mod roundover_precision;
-pub use roundover_precision::certify_roundover_stl;
+pub use roundover_precision::{certify_roundover_stl, certify_treatment_surfaces};
 
 use kernel::{Document, FaceId, MaterialId, MaterialPalette, Object, Point3, Rgba8};
 use std::collections::{BTreeMap, BTreeSet};

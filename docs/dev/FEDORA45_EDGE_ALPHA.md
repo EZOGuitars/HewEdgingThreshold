@@ -1,5 +1,67 @@
 # Fedora 45: isolated Edge Treatment alpha
 
+## Connected-edge alpha: update the existing checkout
+
+See [scope, implementation and certification limits](EDGE_TREATMENT_PHASE2_ALPHA.md).
+The commands below supersede the initial-clone examples later in this document.
+Use the same alpha checkout and state directories. No clean, dependency
+reinstallation, installer or installed-Hew modification is needed.
+
+With the existing prerequisites on PATH:
+
+```bash
+(
+  set -e
+  cd "$HOME/src/hew-edge-treatment-alpha"
+  if [ -n "$(git status --porcelain)" ]; then
+    echo "Local changes found; preserve them before updating."
+    exit 1
+  fi
+  git switch feature/edge-treatment
+  git fetch origin
+  git merge --ff-only origin/feature/edge-treatment
+  git rev-parse HEAD
+
+  # Reuse the existing default caches/output paths in this checkout.
+  unset CARGO_TARGET_DIR
+  pnpm --dir shells/tauri exec node scripts/stage-cli-sidecar.mjs
+  export HEW_BETA_SHA="$(git rev-parse --short=12 HEAD)"
+  # The Tauri beforeBuildCommand builds WASM/frontend; do not build them twice.
+  pnpm --dir shells/tauri exec tauri build \
+    --config src-tauri/tauri.edge-alpha.conf.json --no-bundle
+)
+```
+
+Launch the successfully built alpha with the same isolated state:
+
+```bash
+(
+  set -e
+  set -o pipefail
+  cd "$HOME/src/hew-edge-treatment-alpha"
+  ALPHA_ROOT="$PWD"
+  ALPHA_STATE="$HOME/.local/state/hew-edge-treatment-alpha"
+  mkdir -p "$ALPHA_STATE"/{config,data,cache,state,logs,models}
+  env XDG_CONFIG_HOME="$ALPHA_STATE/config" \
+      XDG_DATA_HOME="$ALPHA_STATE/data" \
+      XDG_CACHE_HOME="$ALPHA_STATE/cache" \
+      XDG_STATE_HOME="$ALPHA_STATE/state" \
+      RUST_LOG=info \
+      "$ALPHA_ROOT/shells/tauri/src-tauri/target/release/hew" \
+      2>&1 | tee -a "$ALPHA_STATE/logs/console.log"
+)
+```
+
+Confirm `com.hew3d.Hew.EdgeTreatmentAlpha` and the new beta SHA. There are no
+`alpha:build`/`alpha:run` wrappers yet. Optional focused checks after building:
+
+```bash
+cargo test -p kernel --test edge_treatment_specs --test multi_edge_treatment_specs --test polygon_edge_treatment_specs --locked
+cargo test -p wasm-api --lib edge_treatment_api --locked
+pnpm --dir app test src/tools/EdgeTreatmentTool.test.ts src/panels/EdgeTreatmentPanel.test.tsx --maxWorkers=2
+```
+
+
 This is an experimental **source launch**, not an installation. Fedora 45 and
 WebKitGTK have not been executed in the managed Debian QA environment. The
 commands below follow the actual repository scripts and the current [Tauri
@@ -126,12 +188,11 @@ unchanged. The launch below additionally isolates all XDG state directories.
 
 ```bash
 # Use the default target locations inside this isolated checkout. The existing
-# staging script copies repo-root target/release/hew-cli; it does not honor a
-# custom CARGO_TARGET_DIR when locating the built sidecar.
+# staging script honors Cargo artifact paths; default paths keep this
+# existing-checkout handoff consistent.
 unset CARGO_TARGET_DIR
 pnpm --dir shells/tauri exec node scripts/stage-cli-sidecar.mjs
 export HEW_BETA_SHA="$(git rev-parse --short=12 HEAD)"
-pnpm --dir app build
 pnpm --dir shells/tauri exec tauri build \
   --config src-tauri/tauri.edge-alpha.conf.json --no-bundle
 ```

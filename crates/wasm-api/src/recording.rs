@@ -44,6 +44,9 @@ pub const RECORDING_FORMAT_VERSION: u32 = 2;
 #[serde(tag = "method", rename_all = "snake_case")]
 pub enum RecordedCall {
     /// Committed edge treatment; preview handles never enter recordings.
+    EdgeTreatmentBatch {
+        command: crate::edge_treatment_api::TreatmentBatchCommand,
+    },
     EdgeTreatment {
         command: crate::edge_treatment_api::TreatmentCommand,
     },

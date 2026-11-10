@@ -22,6 +22,11 @@ function fixture() {
     prepare_roundover: vi.fn((o: bigint, e: bigint, r: number, c: number) =>
       prepare(o, e, { kind: 'roundover', radius: r, max_chord_error: c }),
     ),
+    prepare_chamfer_edges: vi.fn((o: bigint, edges: BigUint64Array, d: number) =>
+      batch(o, edges, { kind: 'chamfer', distance: d })),
+    prepare_roundover_edges: vi.fn((o: bigint, edges: BigUint64Array, r: number, c: number) =>
+      batch(o, edges, { kind: 'roundover', radius: r, max_chord_error: c })),
+    edge_treatment_face_edges: vi.fn(() => BigUint64Array.from([2n, 3n, 4n, 5n])),
     edge_treatment_info_json: vi.fn((h: number) => JSON.stringify(infos.get(h))),
     edge_treatment_mesh: vi.fn(() => {
       const m = {
@@ -54,6 +59,11 @@ function fixture() {
       warnings: [],
     })
     return current
+  }
+  function batch(o: bigint, edges: BigUint64Array, operation: unknown) {
+    const handle = prepare(o, edges[0], operation)
+    infos.set(handle, { ...(infos.get(handle) as object), edges: Array.from(edges, String), segments: 8 })
+    return handle
   }
   let state: TreatmentState | null = null
   const group = new THREE.Group(),
@@ -423,4 +433,44 @@ describe('EdgeTreatmentTool', () => {
     ])
       expect(treatmentError(`${c}: raw panic`)).not.toContain('raw panic')
   })
+})
+
+it('Ctrl/Command toggles a canonical same-solid edge set and invalidates Apply immediately', () => {
+  const f = fixture()
+  f.tool.onPointerDown(snap, ray)
+  f.tool.generate()
+  f.tool.setSelectionModifier(true)
+  f.tool.onPointerDown({ ...snap, element: 3n }, ray)
+  expect(f.state().target?.edges).toEqual(['2', '3'])
+  expect(f.state().phase).toBe('pending')
+  f.tool.apply()
+  expect(f.commit).not.toHaveBeenCalled()
+  f.tool.generate()
+  expect(f.scene.prepare_chamfer_edges).toHaveBeenCalledWith(1n, BigUint64Array.from([2n, 3n]), 0.005)
+  expect(f.state().phase).toBe('ready')
+  f.tool.onPointerDown({ ...snap, object: 9n }, ray)
+  expect(f.state().phase).toBe('error')
+  expect(f.state().target?.edges).toEqual(['2', '3'])
+  f.tool.onPointerDown({ ...snap, element: 3n }, ray)
+  expect(f.state().target?.edges).toEqual(['2'])
+  f.tool.onPointerDown(snap, ray)
+  expect(f.state().target).toBeNull()
+  f.tool.cancel()
+})
+it('face perimeter uses topological IDs and can be cleared or cancelled without a commit', () => {
+  const f = fixture()
+  f.tool.selectFacePerimeter()
+  expect(f.tool.snapConstraint()).toEqual({ facesOnly: true })
+  f.tool.onPointerDown({ ...snap, elementKind: 'face', element: 17n }, ray)
+  expect(f.scene.edge_treatment_face_edges).toHaveBeenCalledWith(1n, 17n)
+  expect(f.state().target?.edges).toEqual(['2', '3', '4', '5'])
+  f.tool.configure({ mode: 'roundover' })
+  f.tool.generate()
+  expect(f.scene.prepare_roundover_edges).toHaveBeenCalledOnce()
+  expect(f.state().phase).toBe('ready')
+  f.tool.clearSelection()
+  expect(f.state().target).toBeNull()
+  expect(f.state().phase).toBe('select')
+  expect(f.commit).not.toHaveBeenCalled()
+  f.tool.cancel()
 })

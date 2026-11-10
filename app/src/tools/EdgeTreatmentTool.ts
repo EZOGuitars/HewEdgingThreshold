@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { t } from '@lingui/core/macro'
 import { parseKernelErrorCode } from '../kernelErrors'
 import type { Scene, DocChangeJs } from '../wasm/loader'
-import type { Tool, Snap, EditContext } from './types'
+import type { Tool, Snap, EditContext, SnapConstraint } from './types'
 import { editContextEq } from './types'
 import type { Ray } from '../viewport/math'
 import { clearPreview, markSessionGhost } from './transformPreview'
@@ -19,6 +19,8 @@ export interface TreatmentInfo {
   handle: number
   object: string
   edge: string
+  edges?: string[]
+  segments?: number
   operation: { kind: TreatmentMode; distance?: number; radius?: number; max_chord_error?: number }
   warnings: { code: string; annotations: { annotation: string; sid: string }[] }[]
 }
@@ -28,7 +30,9 @@ export interface TreatmentState {
   radius: string
   chord: string
   unit: LengthFormat
-  target: { object: bigint; edge: bigint } | null
+  // Keep arrays of IDs serializable for React development instrumentation.
+  target: { object: bigint; edge: bigint; edges?: string[] } | null
+  pickingFace?: boolean
   phase: 'select' | 'pending' | 'ready' | 'error'
   error: string | null
   info: TreatmentInfo | null
@@ -65,6 +69,12 @@ export function treatmentError(error: unknown): string {
       return t`The preview is no longer current. Select the edge again and regenerate it.`
     case 'InsufficientClearance':
       return t`The cut reaches another face. Reduce the distance or radius.`
+    case 'UnsupportedBox':
+      return t`Multiple edges require an unmodified rectangular solid. Polygonal and nonconvex solids are not supported.`
+    case 'InvalidSelection':
+      return t`Select distinct edges on one rectangular solid.`
+    case 'UnknownFace':
+      return t`This face is no longer available. Select the face again.`
     case 'UnsupportedSolid':
     case 'NonPerpendicularFaces':
     case 'UnsupportedTermination':
@@ -87,6 +97,7 @@ export class EdgeTreatmentTool implements Tool {
   // Display formatting has a finite precision ceiling. Never reparse its
   // rounded text after a unit switch; only an actual field edit replaces this.
   private canonical: Partial<Record<'distance' | 'radius' | 'chord', number>> = {}
+  private additive = false
   private active = false
   private unsubscribe: (() => void) | null = null
   private context: EditContext = { kind: 'top' }
@@ -144,46 +155,86 @@ export class EdgeTreatmentTool implements Tool {
     return this.state.target !== null
   }
   onPointerMove(_snap: Snap | null, _ray: Ray): void {}
+  setSelectionModifier(additive: boolean): void { this.additive = additive }
+  snapConstraint(): SnapConstraint | null {
+    return this.state.pickingFace ? { facesOnly: true } : null
+  }
+  selectFacePerimeter(): void {
+    this.clearTimer()
+    this.release()
+    this.state.info = null
+    this.state.acknowledged = false
+    this.state.pickingFace = true
+    this.state.phase = 'select'
+    this.state.error = null
+    this.emit()
+  }
+  clearSelection(): void { this.reset() }
   onPointerDown(snap: Snap | null, _ray: Ray): void {
-    this.reset()
-    // oxlint-disable lingui/no-unlocalized-strings -- stable API error codes, never displayed
+    this.clearTimer()
+    this.release()
+    this.state.info = null
+    this.state.acknowledged = false
+    // Stable native codes are translated by treatmentError.
     if (snap?.instance !== undefined || this.context.kind === 'instance') {
+      // oxlint-disable-next-line lingui/no-unlocalized-strings -- stable native error code
       this.fail('UnsupportedDefinitionMember:')
       return
     }
     if (this.context.kind === 'group') {
+      // oxlint-disable-next-line lingui/no-unlocalized-strings -- stable native error code
       this.fail('ActiveEditingSession:')
       return
     }
-    if (snap?.object === undefined || snap.element === undefined || snap.elementKind !== 'edge') {
-      this.state.error = t`Click the middle of a straight solid edge.`
+    const face = this.state.pickingFace
+    if (snap?.object === undefined || snap.element === undefined || snap.elementKind !== (face ? 'face' : 'edge')) {
+      this.state.error = face ? t`Click a rectangular solid face.` : t`Click the middle of a straight solid edge.`
       this.state.phase = 'error'
       this.emit()
       return
     }
     if (!this.eligible(snap.object, snap.instance)) {
+      // oxlint-disable-next-line lingui/no-unlocalized-strings -- stable native error code
       this.fail('UnsupportedSelectionContext:')
       return
     }
-    // oxlint-enable lingui/no-unlocalized-strings
-    const endpoints = this.scene.edge_endpoints(snap.object, snap.element)
-    if (!endpoints) {
-      // oxlint-disable-next-line lingui/no-unlocalized-strings -- stable API error code
-      this.fail('UnknownEdge:')
-      return
-    }
-    this.state.target = { object: snap.object, edge: snap.element }
-    const geometry = new THREE.BufferGeometry().setAttribute(
-      'position',
-      new THREE.Float32BufferAttribute(endpoints, 3),
-    )
-    const line = new THREE.LineSegments(
-      geometry,
-      new THREE.LineBasicMaterial({ color: 0xffb74d, depthTest: false }),
-    )
-    line.renderOrder = 999
-    this.edgeGroup.add(line)
-    this.requestPreview()
+    try {
+      let edges: bigint[]
+      if (face) {
+        edges = Array.from(this.scene.edge_treatment_face_edges(snap.object, snap.element))
+      } else {
+        const target = this.state.target
+        if (this.additive && target && target.object !== snap.object) {
+          this.state.error = t`Add edges from the same solid, or click without Ctrl/Command to start a new selection.`
+          this.state.phase = 'error'
+          this.emit()
+          return
+        }
+        edges = this.additive && target ? [...(target.edges?.map(BigInt) ?? [target.edge])] : []
+        const at = edges.indexOf(snap.element)
+        if (at >= 0) edges.splice(at, 1)
+        else edges.push(snap.element)
+      }
+      edges.sort((a, b) => a < b ? -1 : a > b ? 1 : 0)
+      // Resolve every endpoint before replacing the selection or highlights.
+      const positions = edges.flatMap(edge => {
+        const endpoints = this.scene.edge_endpoints(snap.object!, edge)
+        if (!endpoints) throw new Error('UnknownEdge:')
+        return Array.from(endpoints)
+      })
+      clearPreview(this.edgeGroup)
+      this.state.pickingFace = false
+      this.state.target = edges.length ? { object: snap.object, edge: edges[0], edges: edges.map(String) } : null
+      if (positions.length) {
+        const geometry = new THREE.BufferGeometry().setAttribute(
+          'position', new THREE.Float32BufferAttribute(positions, 3),
+        )
+        const line = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: 0xffb74d, depthTest: false }))
+        line.renderOrder = 999
+        this.edgeGroup.add(line)
+      }
+      this.requestPreview()
+    } catch (error) { this.fail(error) }
   }
   configure(values: Partial<Pick<TreatmentState, 'mode' | 'distance' | 'radius' | 'chord'>>): void {
     for (const field of ['distance', 'radius', 'chord'] as const) {
@@ -227,7 +278,7 @@ export class EdgeTreatmentTool implements Tool {
   }
   requestPreview(): void {
     this.clearTimer()
-    clearPreview(this.meshGroup)
+    this.release()
     this.state.info = null
     this.state.acknowledged = false
     this.state.error = null
@@ -238,7 +289,7 @@ export class EdgeTreatmentTool implements Tool {
       this.emit()
       return
     }
-    if (!this.state.target) {
+    if (!this.state.target || this.state.pickingFace) {
       this.state.phase = 'select'
       this.emit()
       return
@@ -249,13 +300,14 @@ export class EdgeTreatmentTool implements Tool {
   }
   generate(): void {
     this.clearTimer()
-    if (!this.active || !this.state.target) return
+    if (!this.active || !this.state.target || this.state.pickingFace) return
     const input = this.input()
     if (!input) {
       this.requestPreview()
       return
     }
     const { object, edge } = this.state.target
+    const edges = this.state.target.edges?.map(BigInt) ?? [edge]
     this.state.info = null
     this.state.acknowledged = false
     this.state.phase = 'pending'
@@ -265,8 +317,12 @@ export class EdgeTreatmentTool implements Tool {
     try {
       const handle =
         this.state.mode === 'chamfer'
-          ? this.scene.prepare_chamfer(object, edge, input.distance)
-          : this.scene.prepare_roundover(object, edge, input.radius, input.chord)
+          ? edges.length === 1
+            ? this.scene.prepare_chamfer(object, edge, input.distance)
+            : this.scene.prepare_chamfer_edges(object, BigUint64Array.from(edges), input.distance)
+          : edges.length === 1
+            ? this.scene.prepare_roundover(object, edge, input.radius, input.chord)
+            : this.scene.prepare_roundover_edges(object, BigUint64Array.from(edges), input.radius, input.chord)
       // Success retires the old Scene slot; never discard that old token.
       this.handle = handle
       const info = JSON.parse(this.scene.edge_treatment_info_json(handle)) as TreatmentInfo
@@ -276,6 +332,7 @@ export class EdgeTreatmentTool implements Tool {
           : info.operation.radius === input.radius && info.operation.max_chord_error === input.chord
       if (
         !dimensionsMatch ||
+        (edges.length > 1 && JSON.stringify(info.edges) !== JSON.stringify(edges.map(String))) ||
         info.handle !== handle ||
         info.object !== String(object) ||
         info.edge !== String(edge) ||
@@ -401,6 +458,7 @@ export class EdgeTreatmentTool implements Tool {
     this.release()
     clearPreview(this.edgeGroup)
     this.state.target = null
+    this.state.pickingFace = false
     this.state.info = null
     this.state.phase = 'select'
     this.state.error = null

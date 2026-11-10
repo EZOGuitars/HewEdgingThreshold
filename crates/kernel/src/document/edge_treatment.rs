@@ -4,6 +4,7 @@
 
 use super::*;
 use crate::edge_treatment::{self, EdgeTreatmentError, EdgeTreatmentResult};
+use slotmap::Key;
 use std::sync::Arc;
 
 /// Parameters frozen into a candidate; commit accepts no replacement values.
@@ -58,7 +59,9 @@ impl std::error::Error for DocumentEdgeTreatmentError {}
 #[derive(Debug)]
 pub struct EdgeTreatmentCandidate {
     source: ObjectId,
-    edge: EdgeId,
+    edges: Vec<EdgeId>,
+    segments: usize,
+    surfaces: Vec<(FaceId, edge_treatment::TreatmentSurface)>,
     operation: EdgeTreatmentOperation,
     result: EdgeTreatmentResult,
     identity: Arc<()>,
@@ -77,7 +80,16 @@ impl EdgeTreatmentCandidate {
     }
     /// Valid only in the source topology BEFORE commit. Re-pick afterwards.
     pub fn edge(&self) -> EdgeId {
-        self.edge
+        self.edges[0]
+    }
+    pub fn edges(&self) -> &[EdgeId] {
+        &self.edges
+    }
+    pub fn segments(&self) -> usize {
+        self.segments
+    }
+    pub fn surfaces(&self) -> &[(FaceId, edge_treatment::TreatmentSurface)] {
+        &self.surfaces
     }
     pub fn operation(&self) -> EdgeTreatmentOperation {
         self.operation
@@ -138,18 +150,34 @@ impl Document {
         edge: EdgeId,
         operation: EdgeTreatmentOperation,
     ) -> Result<EdgeTreatmentCandidate, DocumentEdgeTreatmentError> {
+        self.prepare_edge_treatments(object, &[edge], operation)
+    }
+
+    pub fn prepare_edge_treatments(
+        &self,
+        object: ObjectId,
+        edges: &[EdgeId],
+        operation: EdgeTreatmentOperation,
+    ) -> Result<EdgeTreatmentCandidate, DocumentEdgeTreatmentError> {
         self.edge_treatment_target(object)?;
         let source = &self.objects[object].object;
-        let result = match operation {
+        let mut edges = edges.to_vec();
+        edges.sort_by_key(|e| e.data().as_ffi());
+        let generated = match operation {
             EdgeTreatmentOperation::Chamfer { distance } => {
-                edge_treatment::chamfer(source, edge, distance)
+                edge_treatment::chamfer_edges(source, &edges, distance)
             }
             EdgeTreatmentOperation::Roundover {
                 radius,
                 max_chord_error,
-            } => edge_treatment::roundover(source, edge, radius, max_chord_error).map(|r| r.result),
+            } => edge_treatment::roundover_edges(source, &edges, radius, max_chord_error),
         }
         .map_err(DocumentEdgeTreatmentError::Geometry)?;
+        let edge_treatment::MultiEdgeTreatmentResult {
+            result,
+            segments,
+            surfaces,
+        } = generated;
         let reanchored = self
             .annotations
             .iter()
@@ -166,7 +194,9 @@ impl Document {
             .collect();
         Ok(EdgeTreatmentCandidate {
             source: object,
-            edge,
+            edges,
+            segments,
+            surfaces,
             operation,
             result,
             identity: self.edge_candidate_identity.clone(),

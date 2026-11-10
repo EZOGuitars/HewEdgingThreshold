@@ -15,6 +15,12 @@ use crate::{
     ProfileError, Transform, Vec3, WatertightState, tol,
 };
 
+mod multi;
+pub use multi::{
+    MAX_BATCH_PLANES, MultiEdgeTreatmentResult, TreatmentSurface, chamfer_edges,
+    face_perimeter_edges, roundover_edges,
+};
+
 /// Minimum number of chords in a roundover's quarter-circle.
 pub const MIN_ROUNDOVER_SEGMENTS: usize = 4;
 /// Bounded geometry/validation cost. A finer request is refused, not clamped.
@@ -51,6 +57,11 @@ pub struct RoundoverResult {
 pub enum EdgeTreatmentError {
     /// Missing or stale edge handle.
     UnknownEdge,
+    /// Empty, duplicate, foreign, or oversized edge selection.
+    InvalidSelection,
+    /// Multi-edge treatment currently requires an oriented rectangular prism.
+    UnsupportedBox,
+    UnknownFace,
     /// Distance must be finite and greater than POINT_MERGE.
     InvalidDistance,
     /// Radius must be finite and greater than POINT_MERGE.
@@ -88,6 +99,12 @@ pub enum EdgeTreatmentError {
 impl std::fmt::Display for EdgeTreatmentError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::InvalidSelection => write!(f, "select distinct edges of one original solid"),
+            Self::UnsupportedBox => write!(
+                f,
+                "multi-edge treatment requires an unmodified rectangular prism"
+            ),
+            Self::UnknownFace => write!(f, "face handle does not resolve"),
             Self::UnknownEdge => write!(f, "edge handle does not resolve"),
             Self::InvalidDistance => write!(f, "chamfer distance must be finite and positive"),
             Self::InvalidRadius => write!(f, "roundover radius must be finite and positive"),
